@@ -48,7 +48,7 @@ KEYS = [
 
 @pytest.mark.parametrize("label,key", KEYS, ids=[k[1][:12] for k in KEYS])
 def test_modern_key_is_detected(label, key):
-    from agentguard.scanner import scan_text
+    from tainttrail.scanner import scan_text
 
     findings = scan_text(f"export KEY={key}").secrets
     assert findings, f"{key[:14]}... not detected"
@@ -58,8 +58,8 @@ def test_modern_key_is_detected(label, key):
 
 @pytest.mark.parametrize("label,key", KEYS, ids=[k[1][:12] for k in KEYS])
 def test_redaction_removes_the_whole_token(label, key):
-    from agentguard.audit import digest_args
-    from agentguard.scanner import redact_text
+    from tainttrail.audit import digest_args
+    from tainttrail.scanner import redact_text
 
     for line in (f"value {key} end", f'{{"api_key": "{key}"}}', f"Authorization: Bearer {key}"):
         out = redact_text(line)
@@ -72,8 +72,8 @@ def test_redaction_removes_the_whole_token(label, key):
 def test_real_secret_in_egress_is_a_hard_rule(db_path):
     """The new formats feed the existing rules: a modern key sent out is
     `secret_exfiltration`, just like an AWS key."""
-    from agentguard.hooks import HookEngine
-    from agentguard.policy import from_dict
+    from tainttrail.hooks import HookEngine
+    from tainttrail.policy import from_dict
 
     key = P("sk", "-ant-", "api03-") + filler(95, _URLSAFE)
     engine = HookEngine(from_dict({"hard_enforce": ["secret_exfiltration"]}), db_path=db_path)
@@ -111,14 +111,14 @@ CODE = [
 
 
 def _new_pattern_hits(text: str) -> list[str]:
-    from agentguard.scanner import scan_text
+    from tainttrail.scanner import scan_text
 
     return [f.label for f in scan_text(text).findings
             if f.kind == "secret" and f.label in NEW_LABELS()]
 
 
 def NEW_LABELS() -> set[str]:
-    from agentguard.scanner import MODERN_KEY_PATTERNS
+    from tainttrail.scanner import MODERN_KEY_PATTERNS
 
     return {label for label, _rx in MODERN_KEY_PATTERNS}
 
@@ -132,7 +132,7 @@ def test_no_false_positives_across_the_repository_source():
     """Every .py and .md file in this repo: real prose and real code, written
     without any keys in it. The new patterns must not fire on any of it."""
     hits = []
-    for path in list((ROOT / "agentguard").glob("*.py")) + list((ROOT / "docs").glob("*.md")) \
+    for path in list((ROOT / "tainttrail").glob("*.py")) + list((ROOT / "docs").glob("*.md")) \
             + [ROOT / "README.md"]:
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for label in _new_pattern_hits(line):
@@ -142,7 +142,7 @@ def test_no_false_positives_across_the_repository_source():
 
 def test_no_secret_shaped_literals_in_this_test_file():
     """Guard for the rule above: the keys here are built at runtime only."""
-    from agentguard.scanner import MODERN_KEY_PATTERNS
+    from tainttrail.scanner import MODERN_KEY_PATTERNS
 
     source = Path(__file__).read_text(encoding="utf-8")
     for label, rx in MODERN_KEY_PATTERNS:

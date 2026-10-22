@@ -16,7 +16,7 @@ from conftest import text_of
 
 # --- tool pinning ----------------------------------------------------------
 def test_pin_detects_description_change(db_path):
-    from agentguard.pinning import ToolPinStore
+    from tainttrail.pinning import ToolPinStore
 
     store = ToolPinStore(db_path)
     schema = {"type": "object", "properties": {"path": {"type": "string"}}}
@@ -38,7 +38,7 @@ def test_pin_detects_description_change(db_path):
 
 def test_pin_detects_schema_change_alone(db_path):
     """A rug pull can change the schema while leaving the description alone."""
-    from agentguard.pinning import ToolPinStore
+    from tainttrail.pinning import ToolPinStore
 
     store = ToolPinStore(db_path)
     store.check("t", "desc", {"properties": {"a": {"type": "string"}}})
@@ -49,10 +49,10 @@ def test_pin_detects_schema_change_alone(db_path):
 
 async def test_pin_mismatch_forces_review_despite_low_risk(upstream, db_path):
     """A clean, low-scoring call is still held once the tool definition changed."""
-    from agentguard.gateway import build_gateway
-    from agentguard.pinning import ToolPinStore
-    from agentguard.policy import Policy
-    from agentguard.scanner import scan_arguments
+    from tainttrail.gateway import build_gateway
+    from tainttrail.pinning import ToolPinStore
+    from tainttrail.policy import Policy
+    from tainttrail.scanner import scan_arguments
 
     args = {"path": "notes.txt"}
     assert not scan_arguments(args).findings, "control: the call itself must be clean"
@@ -76,9 +76,9 @@ async def test_pin_mismatch_forces_review_despite_low_risk(upstream, db_path):
 
 # --- RBAC ------------------------------------------------------------------
 async def test_rbac_denied_role_is_blocked(upstream, db_path):
-    from agentguard.gateway import build_gateway
-    from agentguard.identity import AgentIdentity
-    from agentguard.policy import Policy, RoleRule
+    from tainttrail.gateway import build_gateway
+    from tainttrail.identity import AgentIdentity
+    from tainttrail.policy import Policy, RoleRule
 
     p = Policy()
     p.enforcement = True
@@ -99,9 +99,9 @@ async def test_rbac_denied_role_is_blocked(upstream, db_path):
 
 async def test_same_tool_differs_by_role(upstream, db_path):
     """The point of identity: one tool, two agents, two answers."""
-    from agentguard.gateway import build_gateway
-    from agentguard.identity import AgentIdentity
-    from agentguard.policy import Policy, RoleRule
+    from tainttrail.gateway import build_gateway
+    from tainttrail.identity import AgentIdentity
+    from tainttrail.policy import Policy, RoleRule
 
     def make(role: str):
         p = Policy()
@@ -126,9 +126,9 @@ async def test_same_tool_differs_by_role(upstream, db_path):
 # --- approval queue --------------------------------------------------------
 async def test_approving_a_review_lets_the_call_proceed(upstream, db_path):
     """The required Stage 2 behaviour, end to end."""
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
-    from agentguard.review_queue import ReviewQueue
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
+    from tainttrail.review_queue import ReviewQueue
 
     p = Policy()
     p.enforcement = True
@@ -158,9 +158,9 @@ async def test_approving_a_review_lets_the_call_proceed(upstream, db_path):
 
 async def test_approval_does_not_transfer_to_a_different_call(upstream, db_path):
     """An approval authorises one call, not the tool in general."""
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
-    from agentguard.review_queue import ReviewQueue
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
+    from tainttrail.review_queue import ReviewQueue
 
     p = Policy()
     p.enforcement = True

@@ -6,9 +6,9 @@ handshake and falls back gracefully if the client can't answer.
 Written against the low-level `mcp` server API (rather than FastMCP's
 high-level one) because that's the only way to get a handle on the
 `ServerSession` early enough to fire `list_roots()` at that exact point in
-the lifecycle - the same point at which AgentGuard's proxy forwards the
+the lifecycle - the same point at which TaintTrail's proxy forwards the
 request upstream. Used by test_stage0_proxy.py to reproduce, without
-depending on npx/node, the hang fixed in agentguard/gateway.py's
+depending on npx/node, the hang fixed in tainttrail/gateway.py's
 `_client_for`.
 """
 

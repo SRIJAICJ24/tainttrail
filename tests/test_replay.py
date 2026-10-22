@@ -1,4 +1,4 @@
-"""`agentguard replay`: past Claude Code transcripts through the hook engine."""
+"""`tainttrail replay`: past Claude Code transcripts through the hook engine."""
 
 from __future__ import annotations
 
@@ -55,13 +55,13 @@ def projects():
 
 
 def _policy():
-    from agentguard.policy import DEFAULT_HARD_ENFORCE, from_dict
+    from tainttrail.policy import DEFAULT_HARD_ENFORCE, from_dict
 
     return from_dict({"hard_enforce": DEFAULT_HARD_ENFORCE})
 
 
 def test_replay_counts_and_signals(projects):
-    from agentguard import replay
+    from tainttrail import replay
 
     root, _gh = projects
     res = replay.run(_policy(), root)
@@ -73,7 +73,7 @@ def test_replay_counts_and_signals(projects):
 
 
 def test_replay_filters_projects(projects):
-    from agentguard import replay
+    from tainttrail import replay
 
     root, _gh = projects
     assert replay.run(_policy(), root, only=("D--proj-b",)).calls == 1
@@ -81,7 +81,7 @@ def test_replay_filters_projects(projects):
 
 
 def test_replay_examples_are_redacted(projects):
-    from agentguard import replay
+    from tainttrail import replay
 
     root, gh = projects
     res = replay.run(_policy(), root, examples=10)
@@ -89,13 +89,13 @@ def test_replay_examples_are_redacted(projects):
     assert res.examples and gh not in text
 
 
-def test_replay_writes_nothing_to_the_agentguard_home(projects, monkeypatch):
-    from agentguard import replay
+def test_replay_writes_nothing_to_the_tainttrail_home(projects, monkeypatch):
+    from tainttrail import replay
 
     root, _gh = projects
     home = Path(tempfile.mkdtemp(prefix="ag-home-"))
     try:
-        monkeypatch.setenv("AGENTGUARD_HOME", str(home))
+        monkeypatch.setenv("TAINTTRAIL_HOME", str(home))
         replay.run(_policy(), root)
         assert list(home.iterdir()) == []
     finally:
@@ -103,7 +103,7 @@ def test_replay_writes_nothing_to_the_agentguard_home(projects, monkeypatch):
 
 
 def test_replay_cli(projects, capsys):
-    from agentguard.cli import main
+    from tainttrail.cli import main
 
     root, _gh = projects
     assert main(["replay", "--projects-dir", str(root), "--json"]) == 0
@@ -115,7 +115,7 @@ def test_replay_cli(projects, capsys):
 def test_replay_counts_taint_events_like_report(projects):
     """report's "taint events" are TOOL_RESULT rows; replay must show the same
     count, so "0 taint events" in a real week can be checked against history."""
-    from agentguard import replay
+    from tainttrail import replay
 
     root, _gh = projects
     res = replay.run(_policy(), root)
@@ -131,12 +131,12 @@ def test_replay_without_a_policy_measures_what_onboard_would_install(projects, m
     will never run."""
     import tempfile as _tf
 
-    from agentguard.cli import main
+    from tainttrail.cli import main
 
     root, _gh = projects
     home, elsewhere = Path(_tf.mkdtemp(prefix="ag-h-")), Path(_tf.mkdtemp(prefix="ag-cwd-"))
     try:
-        monkeypatch.setenv("AGENTGUARD_HOME", str(home))
+        monkeypatch.setenv("TAINTTRAIL_HOME", str(home))
         monkeypatch.chdir(elsewhere)
         assert main(["replay", "--projects-dir", str(root), "--json"]) == 0
         out = json.loads(capsys.readouterr().out)

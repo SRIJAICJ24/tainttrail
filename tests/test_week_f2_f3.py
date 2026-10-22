@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from agentguard.decision import Decision, Signal, Verdict
+from tainttrail.decision import Decision, Signal, Verdict
 
 
 def hook_call(engine, cwd, command="cat ~/.ssh/id_rsa", tid="t"):
@@ -20,8 +20,8 @@ def hook_call(engine, cwd, command="cat ~/.ssh/id_rsa", tid="t"):
 
 
 def _engine(db_path, dev=("agentgaurd",)):
-    from agentguard.hooks import HookEngine
-    from agentguard.policy import from_dict
+    from tainttrail.hooks import HookEngine
+    from tainttrail.policy import from_dict
 
     return HookEngine(from_dict({"dev_workspaces": list(dev)}), db_path=db_path)
 
@@ -30,7 +30,7 @@ def _engine(db_path, dev=("agentgaurd",)):
 # F2 - workspace label
 # =========================================================================
 def test_workspace_label_is_a_short_name_never_a_path():
-    from agentguard.workspace import workspace_label
+    from tainttrail.workspace import workspace_label
 
     assert workspace_label(r"D:\agentgaurd") == "agentgaurd"
     assert workspace_label("/home/someone/projects/shop-api/") == "shop-api"
@@ -42,7 +42,7 @@ def test_workspace_label_is_a_short_name_never_a_path():
 
 
 def test_a_home_directory_label_never_carries_the_username(monkeypatch):
-    from agentguard.workspace import workspace_label
+    from tainttrail.workspace import workspace_label
 
     for var in ("USERNAME", "USER", "LOGNAME"):
         monkeypatch.setenv(var, "plantuser")
@@ -51,7 +51,7 @@ def test_a_home_directory_label_never_carries_the_username(monkeypatch):
 
 
 def test_hook_rows_carry_the_workspace_label(db_path):
-    from agentguard import audit
+    from tainttrail import audit
 
     hook_call(_engine(db_path), r"D:\work\billing-service")
     row = [r for r in audit.last(5, db_path) if r["stage"] == "TOOL_PREPARE"][0]
@@ -60,10 +60,10 @@ def test_hook_rows_carry_the_workspace_label(db_path):
 
 
 def test_default_dev_workspace_is_this_repo():
-    from agentguard.policy import Policy, load
+    from tainttrail.policy import Policy, load
 
     assert Policy().dev_workspaces == ["agentgaurd"]
-    assert load(Path(__file__).resolve().parent.parent / "agentguard.policy.yaml"
+    assert load(Path(__file__).resolve().parent.parent / "tainttrail.policy.yaml"
                 ).dev_workspaces == ["agentgaurd"]
 
 
@@ -79,7 +79,7 @@ def _seed(db_path):
 
 
 def test_report_excludes_dev_workspaces_by_default_and_counts_them(db_path):
-    from agentguard import report
+    from tainttrail import report
 
     _seed(db_path)
     rep = report.build("1d", db_path=db_path, dev_workspaces=["agentgaurd"])
@@ -92,7 +92,7 @@ def test_report_excludes_dev_workspaces_by_default_and_counts_them(db_path):
 
 
 def test_precision_and_labeler_exclude_dev_workspaces(db_path):
-    from agentguard import labels
+    from tainttrail import labels
 
     _seed(db_path)
     dev = ["agentgaurd"]
@@ -108,7 +108,7 @@ def test_precision_and_labeler_exclude_dev_workspaces(db_path):
 def test_export_keeps_the_workspace_label(db_path):
     import csv
 
-    from agentguard import export, report
+    from tainttrail import export, report
 
     _seed(db_path)
     rep = report.build("1d", db_path=db_path, dev_workspaces=["agentgaurd"])
@@ -124,11 +124,11 @@ def test_export_keeps_the_workspace_label(db_path):
 
 
 def test_cli_include_dev_flag(monkeypatch, capsys):
-    from agentguard.cli import main
+    from tainttrail.cli import main
 
     home = tempfile.mkdtemp(prefix="ag-ws-cli-")
     try:
-        monkeypatch.setenv("AGENTGUARD_HOME", home)
+        monkeypatch.setenv("TAINTTRAIL_HOME", home)
         _seed(None)
         assert main(["report", "--since", "1d"]) == 0
         assert "excluded 4 call(s)" in capsys.readouterr().out
@@ -152,9 +152,9 @@ CREATE TABLE audit (
 
 
 def test_migration_keeps_v1_v2_v3_rows_verifying(db_path):
-    from agentguard import audit
-    from agentguard.audit import GENESIS, _entry_hash
-    from agentguard.db import connect
+    from tainttrail import audit
+    from tainttrail.audit import GENESIS, _entry_hash
+    from tainttrail.db import connect
 
     conn = sqlite3.connect(db_path)
     conn.executescript(PHASE_E_SCHEMA)
@@ -193,8 +193,8 @@ NOW = datetime(2026, 10, 9, 12, 0, tzinfo=timezone.utc)
 
 
 def _row_at(db_path, when: datetime, source="hook"):
-    from agentguard import audit
-    from agentguard.db import connect
+    from tainttrail import audit
+    from tainttrail.db import connect
 
     rid = audit.record(stage="TOOL_PREPARE", decision=Decision(Verdict.ALLOW), tool="Bash",
                        db_path=db_path, source=source, workspace="proj")
@@ -204,7 +204,7 @@ def _row_at(db_path, when: datetime, source="hook"):
 
 
 def test_report_lists_zero_event_days_with_a_fail_open_warning(db_path):
-    from agentguard import report
+    from tainttrail import report
 
     for day in (1, 2, 3, 6, 7, 8):              # Oct 4 and 5 are a synthetic outage
         _row_at(db_path, datetime(2026, 10, day, 9, 0, tzinfo=timezone.utc))
@@ -216,7 +216,7 @@ def test_report_lists_zero_event_days_with_a_fail_open_warning(db_path):
 
 
 def test_no_gap_warning_when_every_day_has_events(db_path):
-    from agentguard import report
+    from tainttrail import report
 
     for day in range(1, 10):
         _row_at(db_path, datetime(2026, 10, day, 9, 0, tzinfo=timezone.utc))
@@ -225,7 +225,7 @@ def test_no_gap_warning_when_every_day_has_events(db_path):
 
 
 def test_activity_per_source_and_per_day(db_path):
-    from agentguard import report
+    from tainttrail import report
 
     _row_at(db_path, NOW - timedelta(hours=3), source="hook")
     _row_at(db_path, NOW - timedelta(days=2, hours=1), source="mcp")
@@ -239,13 +239,13 @@ def test_activity_per_source_and_per_day(db_path):
 
 
 def test_status_shows_activity(monkeypatch, capsys):
-    from agentguard.cli import main
-    from agentguard.hooks import HookEngine
-    from agentguard.policy import Policy
+    from tainttrail.cli import main
+    from tainttrail.hooks import HookEngine
+    from tainttrail.policy import Policy
 
     home = tempfile.mkdtemp(prefix="ag-status-")
     try:
-        monkeypatch.setenv("AGENTGUARD_HOME", home)
+        monkeypatch.setenv("TAINTTRAIL_HOME", home)
         hook_call(HookEngine(Policy()), "/srv/proj", command="ls")
         assert main(["status"]) == 0
         out = capsys.readouterr().out
@@ -260,7 +260,7 @@ def fake_home(monkeypatch):
     monkeypatch.setenv("HOME", home)
     monkeypatch.setenv("USERPROFILE", home)
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
-    monkeypatch.setenv("AGENTGUARD_HOME", str(Path(home) / ".agentguard"))
+    monkeypatch.setenv("TAINTTRAIL_HOME", str(Path(home) / ".tainttrail"))
     try:
         yield Path(home)
     finally:
@@ -268,9 +268,9 @@ def fake_home(monkeypatch):
 
 
 def test_doctor_warns_when_hooks_are_silent(fake_home, monkeypatch):
-    from agentguard import config as cfg
-    from agentguard import doctor
-    from agentguard.cli import main
+    from tainttrail import config as cfg
+    from tainttrail import doctor
+    from tainttrail.cli import main
 
     cfg.save(cfg.Config(hook_silence_hours=6))
     assert main(["install-hooks"]) == 0
@@ -287,13 +287,13 @@ def test_doctor_warns_when_hooks_are_silent(fake_home, monkeypatch):
 
 
 def test_doctor_activity_check_is_quiet_without_hooks(fake_home):
-    from agentguard import doctor
+    from tainttrail import doctor
 
     assert doctor.check_hook_activity().status == "PASS"
 
 
 def test_hook_silence_hours_is_validated():
-    from agentguard.config import Config
+    from tainttrail.config import Config
 
     assert Config(hook_silence_hours=0).validate()
     assert not Config(hook_silence_hours=48).validate()

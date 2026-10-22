@@ -1,5 +1,5 @@
 name: Bug report
-description: AgentGuard crashed, hung, or did something other than what its docs say.
+description: TaintTrail crashed, hung, or did something other than what its docs say.
 labels: [bug]
 body:
   - type: markdown
@@ -27,7 +27,7 @@ body:
   - type: textarea
     id: status
     attributes:
-      label: "`agentguard status` output"
+      label: "`tainttrail status` output"
       description: It shows the package, detector and policy versions, and the daemon state.
       render: text
     validations:
@@ -35,7 +35,7 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: "`agentguard doctor` output"
+      label: "`tainttrail doctor` output"
       render: text
   - type: dropdown
     id: os

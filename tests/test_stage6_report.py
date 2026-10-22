@@ -1,4 +1,4 @@
-"""Stage 6 - `agentguard report`.
+"""Stage 6 - `tainttrail report`.
 
 A synthetic audit log with a known mix of ALLOW / REVIEW / BLOCK entries and known
 review-queue outcomes, asserting the counts come out right and that the
@@ -17,13 +17,13 @@ from pathlib import Path
 
 import pytest
 
-from agentguard import report as report_mod
-from agentguard.decision import Decision, Signal, Verdict
+from tainttrail import report as report_mod
+from tainttrail.decision import Decision, Signal, Verdict
 
 
 @pytest.fixture
 def db_path():
-    directory = tempfile.mkdtemp(prefix="agentguard-report-")
+    directory = tempfile.mkdtemp(prefix="tainttrail-report-")
     try:
         yield str(Path(directory) / "test.db")
     finally:
@@ -45,8 +45,8 @@ def seed(db_path, *, stage="TOOL_PREPARE", verdict=Verdict.ALLOW, tool="filesyst
     Written through `audit.record` and then back-dated, so the rows are shaped
     exactly like real ones rather than hand-built.
     """
-    from agentguard import audit
-    from agentguard.db import connect
+    from tainttrail import audit
+    from tainttrail.db import connect
 
     row_id = audit.record(
         stage=stage,
@@ -64,8 +64,8 @@ def queue(db_path, *, tool="filesystem.read", status="pending", minutes_ago=9.0,
           resolved_minutes_ago=8.0, session="s1", score=0.4, kind="tool_call",
           reason="denylisted path", signals=None):
     """Insert one review-queue entry with a controlled timestamp and outcome."""
-    from agentguard.db import connect
-    from agentguard.review_queue import ReviewQueue
+    from tainttrail.db import connect
+    from tainttrail.review_queue import ReviewQueue
 
     q = ReviewQueue(db_path)
     item_id = q.enqueue(
@@ -383,10 +383,10 @@ def test_report_serialises(db_path):
 def test_cli_report_runs(monkeypatch, capsys):
     import json as _json
 
-    directory = tempfile.mkdtemp(prefix="agentguard-cli-report-")
-    monkeypatch.setenv("AGENTGUARD_HOME", directory)
+    directory = tempfile.mkdtemp(prefix="tainttrail-cli-report-")
+    monkeypatch.setenv("TAINTTRAIL_HOME", directory)
     try:
-        from agentguard.cli import main
+        from tainttrail.cli import main
 
         assert main(["report", "--json"]) == 0
         data = _json.loads(capsys.readouterr().out)
@@ -400,10 +400,10 @@ def test_cli_report_runs(monkeypatch, capsys):
 
 
 def test_cli_report_rejects_a_bad_duration(monkeypatch, capsys):
-    directory = tempfile.mkdtemp(prefix="agentguard-cli-report-")
-    monkeypatch.setenv("AGENTGUARD_HOME", directory)
+    directory = tempfile.mkdtemp(prefix="tainttrail-cli-report-")
+    monkeypatch.setenv("TAINTTRAIL_HOME", directory)
     try:
-        from agentguard.cli import main
+        from tainttrail.cli import main
 
         assert main(["report", "--since", "whenever"]) == 1
         assert "duration" in capsys.readouterr().err
@@ -416,9 +416,9 @@ def test_upstream_accepts_an_mcpconfig_json_file():
     import json as _json
     import sys as _sys
 
-    from agentguard.cli import resolve_upstream
+    from tainttrail.cli import resolve_upstream
 
-    directory = tempfile.mkdtemp(prefix="agentguard-upstream-")
+    directory = tempfile.mkdtemp(prefix="tainttrail-upstream-")
     try:
         cfg = {"mcpServers": {"files": {"command": "npx", "args": ["-y", "server"]}}}
         path = Path(directory) / "upstream.mcp.json"

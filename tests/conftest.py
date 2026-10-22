@@ -24,7 +24,7 @@ def _isolated_claude_settings(monkeypatch):
     import shutil
     import tempfile
 
-    directory = tempfile.mkdtemp(prefix="agentguard-claude-")
+    directory = tempfile.mkdtemp(prefix="tainttrail-claude-")
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", directory)
     try:
         yield Path(directory)
@@ -43,7 +43,7 @@ def db_path():
     import shutil
     import tempfile
 
-    directory = tempfile.mkdtemp(prefix="agentguard-test-")
+    directory = tempfile.mkdtemp(prefix="tainttrail-test-")
     try:
         yield str(Path(directory) / "test.db")
     finally:
@@ -66,7 +66,7 @@ def policy():
     Tests assert on what the gateway actually stops, so they run enforcing. The
     shipped default is observe mode; `test_enforcement.py` covers that path.
     """
-    from agentguard.policy import Policy
+    from tainttrail.policy import Policy
 
     p = Policy()
     p.enforcement = True
@@ -76,8 +76,8 @@ def policy():
 @pytest.fixture
 def gateway(upstream, policy, db_path):
     """(proxy, guard) with a known identity."""
-    from agentguard.gateway import build_gateway
-    from agentguard.identity import AgentIdentity
+    from tainttrail.gateway import build_gateway
+    from tainttrail.identity import AgentIdentity
 
     return build_gateway(
         upstream, policy=policy, db_path=db_path,

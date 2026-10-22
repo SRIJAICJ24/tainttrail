@@ -26,7 +26,7 @@ from conftest import ATTACK_RULE, POISON_QUERY, text_of
 # (a) memory poisoning gets quarantined, not trusted
 # =========================================================================
 async def test_a_poisoned_web_result_save_is_quarantined(gateway, db_path):
-    from agentguard.quarantine import QuarantinedMemoryLedger
+    from tainttrail.quarantine import QuarantinedMemoryLedger
 
     proxy, guard = gateway
     ledger = QuarantinedMemoryLedger(db_path)
@@ -59,7 +59,7 @@ async def test_a_poisoned_web_result_save_is_quarantined(gateway, db_path):
 
 async def test_a_quarantine_records_full_provenance(gateway, db_path):
     """Promotion is a human decision, so the reviewer needs the whole story."""
-    from agentguard.quarantine import QuarantinedMemoryLedger
+    from tainttrail.quarantine import QuarantinedMemoryLedger
 
     proxy, _guard = gateway
     async with Client(proxy) as client:
@@ -90,9 +90,9 @@ async def test_b_taint_survives_recall_and_blocks_later_exfiltration(
     store, which is the realistic starting state for this attack: either the gateway
     was still being tuned, or the memory was written before it was installed.
     """
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
-    from agentguard.quarantine import QuarantinedMemoryLedger
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
+    from tainttrail.quarantine import QuarantinedMemoryLedger
 
     policy = Policy()
     policy.enforcement = False          # observe mode for session A
@@ -130,8 +130,8 @@ async def test_b_taint_survives_recall_and_blocks_later_exfiltration(
 
 async def test_b_recall_of_unrelated_memory_does_not_taint(upstream, db_path):
     """The recall hook must not taint everything that passes through memory."""
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
 
     policy = Policy()
     policy.enforcement = True
@@ -156,7 +156,7 @@ async def test_b_recall_of_unrelated_memory_does_not_taint(upstream, db_path):
 # (c) legitimate memory is unaffected
 # =========================================================================
 async def test_c_user_stated_preference_goes_to_trusted_memory(gateway, db_path):
-    from agentguard.quarantine import QuarantinedMemoryLedger
+    from tainttrail.quarantine import QuarantinedMemoryLedger
 
     proxy, guard = gateway
     ledger = QuarantinedMemoryLedger(db_path)
@@ -178,7 +178,7 @@ async def test_c_user_stated_preference_goes_to_trusted_memory(gateway, db_path)
 async def test_c_preference_saved_after_reading_a_page_is_still_trusted(gateway, db_path):
     """Having read an untrusted page does not contaminate every later write -
     only writes whose content actually derives from it."""
-    from agentguard.quarantine import QuarantinedMemoryLedger
+    from tainttrail.quarantine import QuarantinedMemoryLedger
 
     proxy, _guard = gateway
     async with Client(proxy) as client:
@@ -220,7 +220,7 @@ async def test_d_merely_reading_untrusted_content_is_not_blocked(gateway):
 
 async def test_d_ordinary_tier_use_of_tainted_content_is_logged_not_blocked(gateway, db_path):
     """Ordinary-tier sinks log taint overlap and let the call through."""
-    from agentguard import audit
+    from tainttrail import audit
 
     proxy, guard = gateway
     async with Client(proxy) as client:
@@ -249,7 +249,7 @@ async def test_exfiltration_of_tainted_content_is_stopped_same_session(gateway):
 
 
 async def test_promotion_requires_human_action_and_logs_provenance(gateway, db_path):
-    from agentguard.quarantine import (
+    from tainttrail.quarantine import (
         STATUS_PROMOTED,
         QuarantinedMemoryLedger,
     )
@@ -278,7 +278,7 @@ async def test_promotion_requires_human_action_and_logs_provenance(gateway, db_p
 
 def test_quarantine_ttl_expires_unreviewed_content(db_path):
     """Unreviewed attacker text must not accumulate forever."""
-    from agentguard.quarantine import STATUS_EXPIRED, QuarantinedMemoryLedger
+    from tainttrail.quarantine import STATUS_EXPIRED, QuarantinedMemoryLedger
 
     from datetime import datetime, timedelta, timezone
 
@@ -301,7 +301,7 @@ def test_quarantine_ttl_expires_unreviewed_content(db_path):
 
 
 def test_sink_tiers_classify_correctly():
-    from agentguard.policy import (
+    from tainttrail.policy import (
         TIER_EXFILTRATION,
         TIER_ORDINARY,
         TIER_PERSISTENCE,
@@ -319,7 +319,7 @@ def test_sink_tiers_classify_correctly():
 def test_persistence_wins_over_exfiltration_when_both_match():
     """A memory tool whose name also matches an egress glob must still reach the
     ledger rather than the egress path."""
-    from agentguard.policy import TIER_PERSISTENCE, Policy
+    from tainttrail.policy import TIER_PERSISTENCE, Policy
 
     p = Policy()
     p.sinks["exfiltration"].append("*memory_save*")
@@ -327,7 +327,7 @@ def test_persistence_wins_over_exfiltration_when_both_match():
 
 
 def test_shingle_fingerprints_are_deterministic_and_specific():
-    from agentguard.taint import shingles
+    from tainttrail.taint import shingles
 
     a = shingles("the quick brown fox jumps over the lazy dog")
     assert a == shingles("The Quick Brown Fox jumps over the LAZY dog!")   # normalised
@@ -336,7 +336,7 @@ def test_shingle_fingerprints_are_deterministic_and_specific():
 
 def test_taint_map_is_session_scoped():
     """Taint from one session must not leak into another."""
-    from agentguard.taint import TaintRegistry
+    from tainttrail.taint import TaintRegistry
 
     reg = TaintRegistry()
     reg.for_session("a").record("web.search", ATTACK_RULE)

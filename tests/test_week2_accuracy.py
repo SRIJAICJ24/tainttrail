@@ -28,13 +28,13 @@ from pathlib import Path
 
 import pytest
 
-LIVE_POLICY = "Z:/live-week/agentguard.policy.yaml"
+LIVE_POLICY = "Z:/live-week/tainttrail.policy.yaml"
 SCRATCH = "C:/Users/me/AppData/Local/Temp/claude/D--proj/4da8f25e-a77a-48a2/scratchpad"
 
 
 def _engine(db_path, enforce=False):
-    from agentguard.hooks import HookEngine
-    from agentguard.policy import DEFAULT_HARD_ENFORCE, from_dict
+    from tainttrail.hooks import HookEngine
+    from tainttrail.policy import DEFAULT_HARD_ENFORCE, from_dict
 
     policy = from_dict({"enforcement": enforce, "hard_enforce": DEFAULT_HARD_ENFORCE})
     policy.source_path = Path(LIVE_POLICY)
@@ -74,7 +74,7 @@ TEMP_DELETES = [
     f'G=/d/godot.exe; OUT="{SCRATCH}/park3"; rm -rf "$OUT"; timeout 120 $G --path .',
     # cd into the scratchpad first, then a relative delete
     f'cd "{SCRATCH}/doc" && rm -rf out && python build.py',
-    "rm -rf /tmp/agentguard-build-cache",
+    "rm -rf /tmp/tainttrail-build-cache",
     "rm -rf ${TMPDIR}/pytest-of-me",
     r'Remove-Item -Recurse -Force "$env:TEMP\ag-test-3f2a"',
     r"Remove-Item -Recurse -Force C:\Users\me\AppData\Local\Temp\ag-x -ErrorAction SilentlyContinue",
@@ -130,11 +130,11 @@ def test_a_project_that_lives_in_temp_is_still_a_project(db_path):
 
 
 def test_temp_exemption_can_be_switched_off(db_path):
-    from agentguard.hooks import HookEngine
-    from agentguard.policy import from_dict
+    from tainttrail.hooks import HookEngine
+    from tainttrail.policy import from_dict
 
     engine = HookEngine(from_dict({"hooks": {"temp_deletes_ok": False}}), db_path=db_path)
-    engine.handle(pre("Bash", {"command": "rm -rf /tmp/agentguard-build-cache"}))
+    engine.handle(pre("Bash", {"command": "rm -rf /tmp/tainttrail-build-cache"}))
     assert "hook:destructive_command" in engine.events[-1]["signals"]
 
 
@@ -170,14 +170,14 @@ def test_credential_words_alone_do_not_trigger_entropy(db_path, tool, tool_input
     "session_id: {v}",
 ])
 def test_values_assigned_to_credential_names_are_still_caught(line):
-    from agentguard.scanner import scan_secrets
+    from tainttrail.scanner import scan_secrets
 
     kinds = {f.kind for f in scan_secrets(line.format(v=_token()))}
     assert kinds & {"secret", "secret_entropy"}, line
 
 
 def test_entropy_needs_the_value_not_just_the_line():
-    from agentguard.scanner import scan_secrets
+    from tainttrail.scanner import scan_secrets
 
     blob = _token()
     assert not scan_secrets(f"see auth.ts; the build id is {blob}")
@@ -251,7 +251,7 @@ def test_real_credential_reads_are_still_hard_blocked(db_path, tool, tool_input)
 
 
 def test_template_suffixes_only_exempt_the_end_of_the_name():
-    from agentguard.scanner import scan_paths
+    from tainttrail.scanner import scan_paths
 
     assert not scan_paths(".env.example")
     assert not scan_paths("/srv/app/.env.template")
@@ -279,7 +279,7 @@ def test_local_database_urls_are_not_secrets(db_path, command):
     "DATABASE_URL=postgresql://u:pw@localhost/x,postgresql://u:pw@10.2.3.4.nip.io/y run",
 ])
 def test_remote_database_urls_are_still_secrets(command):
-    from agentguard.scanner import scan_secrets
+    from tainttrail.scanner import scan_secrets
 
     assert any(f.label == "Basic Auth Credentials" for f in scan_secrets(command)), command
 

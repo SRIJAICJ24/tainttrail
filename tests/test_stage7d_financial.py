@@ -21,8 +21,8 @@ def _prepare(guard, tool):
 
 
 def _gateway(upstream, db_path, enforcement=True, **policy):
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import from_dict
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import from_dict
 
     p = from_dict({"enforcement": enforcement, **policy})
     return build_gateway(upstream, policy=p, db_path=db_path)
@@ -32,7 +32,7 @@ def _gateway(upstream, db_path, enforcement=True, **policy):
 # extraction
 # =========================================================================
 def test_amount_currency_and_payee_are_extracted():
-    from agentguard.financial import extract
+    from tainttrail.financial import extract
 
     t = extract({"amount": "$1,200.50", "payee": "Acme"})
     assert (t.amount, t.currency, t.payee) == (1200.50, "USD", "Acme")
@@ -44,7 +44,7 @@ def test_amount_currency_and_payee_are_extracted():
 
 
 def test_financial_tier_matches_actions_not_substrings():
-    from agentguard.policy import Policy
+    from tainttrail.policy import Policy
 
     p = Policy()
     for tool in ("payments.purchase", "stripe.create_payment", "shop.checkout",
@@ -59,7 +59,7 @@ def test_financial_tier_matches_actions_not_substrings():
 # =========================================================================
 @pytest.mark.parametrize("enforcement", [True, False])
 async def test_a_purchase_always_reaches_the_review_queue(upstream, db_path, enforcement):
-    from agentguard.review_queue import ReviewQueue
+    from tainttrail.review_queue import ReviewQueue
 
     proxy, guard = _gateway(upstream, db_path, enforcement=enforcement)
     async with Client(proxy) as client:
@@ -109,9 +109,9 @@ async def test_currency_mismatch_is_flagged_not_guessed(upstream, db_path):
 async def test_approved_payment_writes_a_receipt_that_passes_chain_verification(
     upstream, db_path
 ):
-    from agentguard import audit
-    from agentguard.financial import RECEIPT_STAGE, args_hash
-    from agentguard.review_queue import ReviewQueue
+    from tainttrail import audit
+    from tainttrail.financial import RECEIPT_STAGE, args_hash
+    from tainttrail.review_queue import ReviewQueue
 
     proxy, guard = _gateway(upstream, db_path)
     queue = ReviewQueue(db_path)
@@ -140,9 +140,9 @@ async def test_approved_payment_writes_a_receipt_that_passes_chain_verification(
 
 
 async def test_tampering_with_a_receipt_breaks_the_chain(upstream, db_path):
-    from agentguard import audit
-    from agentguard.db import connect
-    from agentguard.review_queue import ReviewQueue
+    from tainttrail import audit
+    from tainttrail.db import connect
+    from tainttrail.review_queue import ReviewQueue
 
     proxy, _guard = _gateway(upstream, db_path)
     queue = ReviewQueue(db_path)
@@ -163,7 +163,7 @@ async def test_tampering_with_a_receipt_breaks_the_chain(upstream, db_path):
 async def test_approved_spend_counts_toward_the_cap(upstream, db_path):
     """The cap is enforced against approved receipts, so approving one payment
     reduces the room left for the next."""
-    from agentguard.review_queue import ReviewQueue
+    from tainttrail.review_queue import ReviewQueue
 
     proxy, guard = _gateway(upstream, db_path,
                             financial={"session_cap": {"amount": 100, "currency": "USD"}})
@@ -186,8 +186,8 @@ async def test_approved_spend_counts_toward_the_cap(upstream, db_path):
 # =========================================================================
 @pytest.fixture
 def home(monkeypatch):
-    directory = tempfile.mkdtemp(prefix="agentguard-lock-")
-    monkeypatch.setenv("AGENTGUARD_HOME", directory)
+    directory = tempfile.mkdtemp(prefix="tainttrail-lock-")
+    monkeypatch.setenv("TAINTTRAIL_HOME", directory)
     try:
         yield directory
     finally:
@@ -195,13 +195,13 @@ def home(monkeypatch):
 
 
 def _cli(*argv) -> int:
-    from agentguard.cli import main
+    from tainttrail.cli import main
     return main(list(argv))
 
 
 async def test_lock_all_denies_calls_in_every_session_even_in_observe_mode(home, upstream):
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
 
     proxy, guard = build_gateway(upstream, policy=Policy())      # observe mode, default DB
     async with Client(proxy) as a, Client(proxy) as b:
@@ -224,8 +224,8 @@ async def test_lock_all_denies_calls_in_every_session_even_in_observe_mode(home,
 
 
 async def test_lock_session_only_affects_that_session(home, upstream):
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
 
     proxy, guard = build_gateway(upstream, policy=Policy())
     async with Client(proxy) as a, Client(proxy) as b:
@@ -242,8 +242,8 @@ async def test_lock_session_only_affects_that_session(home, upstream):
 
 
 async def test_in_process_kill_switch_is_absolute_in_observe_mode(upstream, db_path):
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
 
     proxy, guard = build_gateway(upstream, policy=Policy(), db_path=db_path)
     async with Client(proxy) as client:

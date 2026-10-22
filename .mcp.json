@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "agentguard": {
+    "tainttrail": {
       "type": "http",
       "url": "http://localhost:9000/mcp"
     }

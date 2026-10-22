@@ -4,7 +4,7 @@
     {
       "name": "dashboard",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "agentguard.cli", "dashboard", "--port", "9001"],
+      "runtimeArgs": ["-m", "tainttrail.cli", "dashboard", "--port", "9001"],
       "port": 9001
     }
   ]

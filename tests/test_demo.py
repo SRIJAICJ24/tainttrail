@@ -1,4 +1,4 @@
-"""`agentguard demo`: deterministic, offline, never touches the real home."""
+"""`tainttrail demo`: deterministic, offline, never touches the real home."""
 
 from __future__ import annotations
 
@@ -13,13 +13,13 @@ import pytest
 @pytest.fixture()
 def fake_home(monkeypatch):
     home = Path(tempfile.mkdtemp(prefix="ag-demo-home-"))
-    monkeypatch.setenv("AGENTGUARD_HOME", str(home))
+    monkeypatch.setenv("TAINTTRAIL_HOME", str(home))
     yield home
     shutil.rmtree(home, ignore_errors=True)
 
 
 def test_demo_stops_the_attack(fake_home):
-    from agentguard import demo
+    from tainttrail import demo
 
     res = demo.run(say=lambda _line: None)
     assert res.ok, res.lines
@@ -30,7 +30,7 @@ def test_demo_stops_the_attack(fake_home):
 
 
 def test_demo_is_deterministic(fake_home):
-    from agentguard import demo
+    from tainttrail import demo
 
     first = demo.run(say=lambda _line: None).lines
     second = demo.run(say=lambda _line: None).lines
@@ -38,15 +38,15 @@ def test_demo_is_deterministic(fake_home):
 
 
 def test_demo_writes_nothing_to_the_home_and_restores_the_environment(fake_home):
-    from agentguard import demo
+    from tainttrail import demo
 
     demo.run(say=lambda _line: None)
-    assert os.environ["AGENTGUARD_HOME"] == str(fake_home)
+    assert os.environ["TAINTTRAIL_HOME"] == str(fake_home)
     assert list(fake_home.iterdir()) == []
 
 
 def test_demo_keep_leaves_an_inspectable_audit_log(fake_home):
-    from agentguard import audit, demo
+    from tainttrail import audit, demo
 
     keep = Path(tempfile.mkdtemp(prefix="ag-demo-keep-"))
     try:
@@ -59,7 +59,7 @@ def test_demo_keep_leaves_an_inspectable_audit_log(fake_home):
 
 
 def test_demo_cli(fake_home, capsys):
-    from agentguard.cli import main
+    from tainttrail.cli import main
 
     assert main(["demo"]) == 0
     out = capsys.readouterr().out

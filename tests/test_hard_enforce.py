@@ -3,7 +3,7 @@
 Everything else keeps observe behaviour (log only). Default list:
   credential_files     reading ~/.ssh, ~/.aws or .env files
   secret_exfiltration  a real (structural) secret in a call to an exfiltration sink
-  self_protection      the agent editing AgentGuard's own config, policy, audit DB or
+  self_protection      the agent editing TaintTrail's own config, policy, audit DB or
                        the Claude Code settings that register its hooks
 """
 
@@ -27,11 +27,11 @@ HARD_CASES = [
     # policy file (the one the daemon loaded), not any file with that name.
     ("self_protection", "Write", {"file_path": "/home/me/proj/.claude/settings.json",
                                   "content": '{"disableAllHooks": true}'}),
-    ("self_protection", "Edit", {"file_path": "D:/live-week/agentguard.policy.yaml",
+    ("self_protection", "Edit", {"file_path": "D:/live-week/tainttrail.policy.yaml",
                                  "old_string": "enforcement: true",
                                  "new_string": "enforcement: false"}),
 ]
-LIVE_POLICY = "D:/live-week/agentguard.policy.yaml"
+LIVE_POLICY = "D:/live-week/tainttrail.policy.yaml"
 
 # Rules that stay observe-only: logged, never denied in observe mode.
 NORMAL_CASES = [
@@ -44,8 +44,8 @@ NORMAL_CASES = [
 
 
 def _hook_engine(db_path, *, enforce=False, hard=None):
-    from agentguard.hooks import HookEngine
-    from agentguard.policy import DEFAULT_HARD_ENFORCE, from_dict
+    from tainttrail.hooks import HookEngine
+    from tainttrail.policy import DEFAULT_HARD_ENFORCE, from_dict
 
     data = {"enforcement": enforce,
             "hard_enforce": DEFAULT_HARD_ENFORCE if hard is None else hard}
@@ -68,7 +68,7 @@ def decision(response):
 # =========================================================================
 @pytest.mark.parametrize("rule,tool,tool_input", HARD_CASES)
 def test_hard_rule_denies_in_observe_mode_via_hooks(db_path, rule, tool, tool_input):
-    from agentguard import audit
+    from tainttrail import audit
 
     engine = _hook_engine(db_path)
     response = engine.handle(pre(tool, tool_input))
@@ -112,8 +112,8 @@ def test_only_listed_rules_are_hard(db_path):
 # MCP gateway
 # =========================================================================
 def _gateway(upstream, db_path, hard=None):
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import DEFAULT_HARD_ENFORCE, from_dict
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import DEFAULT_HARD_ENFORCE, from_dict
 
     policy = from_dict({"enforcement": False,
                         "hard_enforce": DEFAULT_HARD_ENFORCE if hard is None else hard})
@@ -171,7 +171,7 @@ async def test_empty_list_behaves_like_before_for_the_gateway(upstream, db_path,
 # policy, report, labeler
 # =========================================================================
 def test_policy_parsing_and_defaults():
-    from agentguard.policy import DEFAULT_HARD_ENFORCE, Policy, from_dict, load
+    from tainttrail.policy import DEFAULT_HARD_ENFORCE, Policy, from_dict, load
     from pathlib import Path
 
     assert Policy().hard_enforce == [], "a policy built in code keeps today's behaviour"
@@ -180,7 +180,7 @@ def test_policy_parsing_and_defaults():
     assert from_dict({"hard_enforce": []}).hard_enforce == []
     with pytest.raises(ValueError):
         from_dict({"hard_enforce": ["block_everything"]})
-    shipped = load(Path(__file__).resolve().parent.parent / "agentguard.policy.yaml")
+    shipped = load(Path(__file__).resolve().parent.parent / "tainttrail.policy.yaml")
     assert shipped.hard_enforce == DEFAULT_HARD_ENFORCE
 
 
@@ -189,8 +189,8 @@ def test_starter_policy_carries_the_default_list(tmp_dir=None):
     import tempfile
     from pathlib import Path
 
-    from agentguard.onboarding import write_starter_policy
-    from agentguard.policy import DEFAULT_HARD_ENFORCE, load
+    from tainttrail.onboarding import write_starter_policy
+    from tainttrail.policy import DEFAULT_HARD_ENFORCE, load
 
     d = Path(tempfile.mkdtemp(prefix="ag-starter-"))
     try:
@@ -200,7 +200,7 @@ def test_starter_policy_carries_the_default_list(tmp_dir=None):
 
 
 def test_report_shows_hard_enforced_blocks_separately(db_path):
-    from agentguard import report
+    from tainttrail import report
 
     engine = _hook_engine(db_path)
     engine.handle(pre("Read", {"file_path": "/home/me/.ssh/id_rsa"}))
@@ -214,7 +214,7 @@ def test_report_shows_hard_enforced_blocks_separately(db_path):
 
 
 def test_labeler_says_blocked_for_hard_enforced_rows(db_path):
-    from agentguard import labels
+    from tainttrail import labels
 
     _hook_engine(db_path).handle(pre("Read", {"file_path": "/home/me/.ssh/id_rsa"}))
     row = labels.interruptions(db_path=db_path)[0]

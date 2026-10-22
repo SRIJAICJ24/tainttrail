@@ -1,6 +1,6 @@
-"""What a pip install gets: the `agentguard` package and nothing else.
+"""What a pip install gets: the `tainttrail` package and nothing else.
 
-Regression: `agentguard simulate` imported examples/mock_mcp_server.py from the
+Regression: `tainttrail simulate` imported examples/mock_mcp_server.py from the
 source tree, so it crashed with ModuleNotFoundError from any installed wheel
 (found on the week 1 frozen install).
 """
@@ -35,14 +35,14 @@ def test_simulate_runs_with_only_the_package_installed():
     work = Path(tempfile.mkdtemp(prefix="ag-pkg-"))
     try:
         site = work / "site"
-        shutil.copytree(ROOT / "agentguard", site / "agentguard",
+        shutil.copytree(ROOT / "tainttrail", site / "tainttrail",
                         ignore=shutil.ignore_patterns("__pycache__"))
         home = work / "home"
         home.mkdir()
-        env = {**os.environ, "PYTHONPATH": child_pythonpath(site, drop=ROOT), "AGENTGUARD_HOME": str(home),
+        env = {**os.environ, "PYTHONPATH": child_pythonpath(site, drop=ROOT), "TAINTTRAIL_HOME": str(home),
                "HOME": str(home), "CLAUDE_CONFIG_DIR": str(home / "claude")}
         out = subprocess.run(
-            [sys.executable, "-m", "agentguard.cli", "simulate", "--db", str(home / "sim.db"),
+            [sys.executable, "-m", "tainttrail.cli", "simulate", "--db", str(home / "sim.db"),
              "--min-score", "100"],
             cwd=work, env=env, capture_output=True, text=True, timeout=300)
         assert out.returncode == 0, out.stdout[-2000:] + out.stderr[-2000:]
@@ -54,7 +54,7 @@ def test_simulate_runs_with_only_the_package_installed():
 def test_the_examples_path_still_works_for_docs_and_tests():
     import mock_mcp_server
 
-    from agentguard import mock_upstream
+    from tainttrail import mock_upstream
 
     assert mock_mcp_server is mock_upstream, "one module, so _MEMORY is shared"
     assert mock_mcp_server.WORM_PAYLOAD

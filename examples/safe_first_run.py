@@ -1,4 +1,4 @@
-"""Build a disposable sandbox for AgentGuard's first run against a REAL MCP server.
+"""Build a disposable sandbox for TaintTrail's first run against a REAL MCP server.
 
 Up to now the gateway has only ever been pointed at `examples/mock_mcp_server.py`,
 where nothing it does can matter. The first run against a real server is the risky
@@ -28,7 +28,7 @@ from pathlib import Path
 SANDBOX_FILES: dict[str, str] = {
     "notes.md": (
         "# Sandbox notes\n\n"
-        "This directory exists only to give AgentGuard a real MCP server to sit in\n"
+        "This directory exists only to give TaintTrail a real MCP server to sit in\n"
         "front of. Nothing in here matters. Delete it whenever you like.\n"
     ),
     "report.txt": (
@@ -45,7 +45,7 @@ SANDBOX_FILES: dict[str, str] = {
     # A decoy. Fake values, but shaped like the real thing, so the first BLOCK you
     # ever see happens somewhere it cannot hurt.
     ".env": (
-        "# FAKE credentials for testing AgentGuard. Not real. Not valid anywhere.\n"
+        "# FAKE credentials for testing TaintTrail. Not real. Not valid anywhere.\n"
         "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n"
         "DATABASE_PASSWORD=not-a-real-password-just-a-decoy\n"
     ),
@@ -71,7 +71,7 @@ def upstream_config(directory: Path) -> dict:
 
     The scoping is the safety property, and it is enforced twice over: the
     filesystem server itself refuses paths outside the roots it was started with,
-    and AgentGuard's own denylist sits in front of that. Neither is trusted alone.
+    and TaintTrail's own denylist sits in front of that. Neither is trusted alone.
     """
     return {
         "mcpServers": {
@@ -89,10 +89,10 @@ def upstream_config(directory: Path) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Create a disposable sandbox for AgentGuard's first real run."
+        description="Create a disposable sandbox for TaintTrail's first real run."
     )
-    parser.add_argument("--dir", default="agentguard-sandbox",
-                        help="where to build the sandbox (default: ./agentguard-sandbox)")
+    parser.add_argument("--dir", default="tainttrail-sandbox",
+                        help="where to build the sandbox (default: ./tainttrail-sandbox)")
     parser.add_argument("--force", action="store_true",
                         help="delete and recreate the sandbox if it already exists")
     parser.add_argument("--port", type=int, default=9000)
@@ -113,12 +113,12 @@ def main() -> int:
     print()
     # The config-file form works in every shell; inline JSON does not survive
     # Windows PowerShell 5.1, which strips the inner double quotes.
-    print(f"   python -m agentguard.cli proxy --observe --port {args.port} "
+    print(f"   python -m tainttrail.cli proxy --observe --port {args.port} "
           f"--upstream \"{config_file}\"")
     print()
-    print("2. Point Claude Code at AgentGuard rather than the filesystem server:")
+    print("2. Point Claude Code at TaintTrail rather than the filesystem server:")
     print()
-    print(f"   claude mcp add --transport http agentguard "
+    print(f"   claude mcp add --transport http tainttrail "
           f"http://localhost:{args.port}/mcp")
     print()
     print("3. Ask your agent to do ordinary things in the sandbox - read notes.md,")
@@ -127,8 +127,8 @@ def main() -> int:
     print()
     print("4. See what the gateway would have done:")
     print()
-    print("   agentguard audit --last 30")
-    print("   agentguard report --since 1d")
+    print("   tainttrail audit --last 30")
+    print("   tainttrail report --since 1d")
     print()
     print("Nothing outside this directory is reachable: the filesystem server is")
     print("started with the sandbox as its only root. Delete it when you are done:")

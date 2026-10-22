@@ -14,7 +14,8 @@ in them came from the same code and the same rules, so:
 | `week1` | `2026.10.3` | `p-78e342c112` | `D:/agentguard-week/agentguard.policy.yaml` | wheel from `week1`, non-editable, venv `D:/agentguard-week` | **2026-10-03** (frozen 2026-10-02; the daemon first answered from the venv at about 04:40 UTC, first hook row is audit #14 at 04:41 UTC) | ends when `week2` is installed |
 | `week2` | `2026.10.4` | `p-68f143cdb5` (the week1 live policy file, unchanged, hashes to this under week2 code: the new `temp_deletes_ok` setting defaults to true) | `D:/agentguard-week/agentguard.policy.yaml` | wheel from `week2`, non-editable, same venv | never installed: the live daemon still ran week1 code on 2026-10-10 (its health reply carries no version fields) | superseded by `week3` |
 | `week3` | `2026.10.5` | `p-f27874a375` (the unchanged live file and the shipped file both hash to this under week3 code) | same live file | wheel `agentguard-0.4.0` from `week3`, non-editable, same venv | installed 2026-10-19 (daemon health confirmed 0.4.0 / 2026.10.5 / p-f27874a375) | superseded by `week4` |
-| `week4` | `2026.10.6` | `p-b81428c2d4` with `trusted_delete_dirs: ["~/bbtest"]` added to the live file (`p-0cf2eccf8f` if the file is left unchanged) | same live file | wheel `agentguard-0.4.1` from `week4`, same venv | starts when the user installs it | — |
+| `week4` | `2026.10.6` | `p-b81428c2d4` with `trusted_delete_dirs: ["~/bbtest"]` added to the live file (`p-0cf2eccf8f` if the file is left unchanged) | same live file | wheel `agentguard-0.4.1` from `week4`, same venv | installed 2026-10-19 (0.4.1 was built; install not confirmed) | superseded by `week5` |
+| `week5` | `2026.10.7` | `p-084c0f1e59` with `~/bbtest` trusted (`p-aba1e11dac` without); hashed from the migrated copy `tainttrail.policy.yaml` | `D:/agentguard-week/tainttrail.policy.yaml` (copied by `tainttrail migrate`) | wheel `tainttrail-0.5.0` from `week5`, same venv, old `agentguard` dist uninstalled | starts when the user migrates | — |
 
 ## Why week2 exists: week 1 accuracy, measured
 
@@ -142,3 +143,29 @@ mode each one asked for permission. These were false alarms. Two changes (detect
 Replay of 9,307 real calls: destructive flags 27 -> 22 with `~/bbtest` trusted (the 5
 removed are the WSL test runs). Hard blocks are 34 either way, and so are temp
 deletes (108).
+
+## Why week5 exists: renamed to TaintTrail
+
+Several unrelated projects are called AgentGuard. Two of them are Claude Code tools that
+collide with this one on the machine: GoPlus Security's (CLI `agentguard`, state in the
+same home folder, e.g. `audit.jsonl`) and momenbasel's (hook command `agentguard hook`).
+In 0.5.0 the package, CLI, hook module, state folder (now `~/.tainttrail`), env var (now
+`TAINTTRAIL_HOME`; `AGENTGUARD_HOME` still works with a warning), config and database
+file names, launcher names and default policy file name all became `tainttrail`.
+Detector 2026.10.7: the detection logic is unchanged, but name strings in detection
+modules changed. Those are the self-protection command patterns, the control-plane tool
+prefix `tainttrail*`, and the default `gateway_servers: ["tainttrail"]`, so a server
+named `agentguard` no longer skips the hook by default.
+
+- `tainttrail migrate` copies only this project's files, by exact name and without
+  listing the old folder. The old database is opened read-only and copied with SQLite's
+  backup API. Launchers are regenerated, not copied. After copying it verifies the chain,
+  every table's row count, the ledger and the policy hash. It never changes the old
+  folder.
+- `install-hooks` / `uninstall-hooks` now recognise only the exact entries they write.
+  Before, they used substring matching: any URL containing `/hooks/claude-code` or any
+  command containing the module name counted as ours. That was a real bug; its tests
+  failed before the fix. Another tool's hook can no longer be removed or replaced.
+- The live policy file (a copy of the week1 shipped file) lists
+  `gateway_servers: ["agentguard"]` explicitly. `migrate` prints a note: the user uses no
+  MCP servers, so removing it is safe.

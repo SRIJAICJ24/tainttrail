@@ -6,7 +6,7 @@
 #
 # One-time setup (see CONTRIBUTING or the launch checklist):
 #   - pypi.org and test.pypi.org -> Account -> Publishing -> add a pending GitHub
-#     publisher: project "agentguard", owner SRIJAICJ24, repo agentguard-pro,
+#     publisher: project "tainttrail", owner SRIJAICJ24, repo tainttrail,
 #     workflow "release.yml", environment "pypi" / "testpypi".
 #   - GitHub -> Settings -> Environments: create `testpypi` and `pypi`; give `pypi`
 #     a required reviewer and restrict it to tags matching v*.
@@ -50,14 +50,14 @@ jobs:
       - name: The wheel works on its own
         working-directory: ${{ runner.temp }}
         env:
-          AGENTGUARD_HOME: ${{ runner.temp }}/agentguard-home
+          TAINTTRAIL_HOME: ${{ runner.temp }}/tainttrail-home
           CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-config
         run: |
           python -m venv venv
           venv/bin/pip install "$GITHUB_WORKSPACE"/dist/*.whl
-          venv/bin/agentguard --version
-          venv/bin/agentguard simulate --min-score 100 --db "$RUNNER_TEMP/sim.db"
-          venv/bin/agentguard demo
+          venv/bin/tainttrail --version
+          venv/bin/tainttrail simulate --min-score 100 --db "$RUNNER_TEMP/sim.db"
+          venv/bin/tainttrail demo
       - uses: actions/upload-artifact@v5
         with:
           name: python-package-distributions
@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/agentguard
+      url: https://test.pypi.org/p/tainttrail
     permissions:
       id-token: write
     steps:
@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/agentguard
+      url: https://pypi.org/p/tainttrail
     permissions:
       id-token: write
     steps:

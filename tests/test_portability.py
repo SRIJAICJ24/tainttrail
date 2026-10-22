@@ -12,14 +12,14 @@ import ast
 
 
 def test_canonical_dump_is_pinned():
-    from agentguard.versions import _canonical
+    from tainttrail.versions import _canonical
 
     assert _canonical(ast.parse("x = 1")) == \
         "Module(body=[Assign(targets=[Name(id='x',ctx=Store())],value=Constant(value=1))])"
 
 
 def test_canonical_dump_ignores_empty_fields_however_a_version_spells_them():
-    from agentguard.versions import _canonical
+    from tainttrail.versions import _canonical
 
     a = ast.parse("def f(x):\n    return x\n")
     b = ast.parse("def f(x):\n    return x\n")
@@ -34,7 +34,7 @@ def test_canonical_dump_ignores_empty_fields_however_a_version_spells_them():
 
 def test_fingerprint_does_not_use_ast_dump(monkeypatch):
     """ast.dump is the version-dependent part; the fingerprint must not call it."""
-    from agentguard import versions
+    from tainttrail import versions
 
     def boom(*_a, **_k):
         raise AssertionError("ast.dump is Python-version dependent")

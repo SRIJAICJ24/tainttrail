@@ -1,7 +1,7 @@
 """Readiness phase E - turning the measurement week into a number.
 
 E1 the labeler, E2 precision, E3 detector/policy versions on audit rows, E4 the
-anonymized export. Every test uses a temp database; none touches ~/.agentguard.
+anonymized export. Every test uses a temp database; none touches ~/.tainttrail.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from agentguard.decision import Decision, Signal, Verdict
+from tainttrail.decision import Decision, Signal, Verdict
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -25,8 +25,8 @@ ROOT = Path(__file__).resolve().parent.parent
 def record(db_path, verdict=Verdict.BLOCK, *, tool="Bash", signals=("path:**/.ssh/**",),
            source="hook", mode="observe", detector_version=None, policy_version="p-test",
            arguments=None, ts_offset_min=0.0):
-    from agentguard import audit
-    from agentguard.db import connect
+    from tainttrail import audit
+    from tainttrail.db import connect
 
     rid = audit.record(
         stage="TOOL_PREPARE",
@@ -54,7 +54,7 @@ def scripted(*answers):
 # E1 - the labeler
 # =========================================================================
 def test_labeler_walks_unlabeled_decisions_with_scripted_input(db_path):
-    from agentguard import labels
+    from tainttrail import labels
 
     ids = [record(db_path), record(db_path, Verdict.REVIEW, signals=("hook:destructive_command",)),
            record(db_path), record(db_path)]
@@ -78,7 +78,7 @@ def test_labeler_walks_unlabeled_decisions_with_scripted_input(db_path):
 
 
 def test_labeler_quit_and_bad_input(db_path):
-    from agentguard import labels
+    from tainttrail import labels
 
     rid = record(db_path)
     record(db_path)
@@ -90,9 +90,9 @@ def test_labeler_quit_and_bad_input(db_path):
 
 def test_labeler_ignores_a_byte_order_mark_on_piped_input(db_path):
     """Regression: Windows PowerShell 5.1 prefixes piped stdin with a UTF-8 BOM, so
-    `"t`nf" | agentguard report --fp-review` read the first answer as invalid and
+    `"t`nf" | tainttrail report --fp-review` read the first answer as invalid and
     every later answer landed on the wrong decision."""
-    from agentguard import labels
+    from tainttrail import labels
 
     first, second = record(db_path), record(db_path)
     labels.review(db_path=db_path, input_fn=scripted("\ufefft", "f"), out=lambda _t: None)
@@ -100,7 +100,7 @@ def test_labeler_ignores_a_byte_order_mark_on_piped_input(db_path):
 
 
 def test_enforce_mode_rows_say_blocked_not_would_have(db_path):
-    from agentguard import labels
+    from tainttrail import labels
 
     record(db_path, mode="enforce")
     out: list[str] = []
@@ -110,7 +110,7 @@ def test_enforce_mode_rows_say_blocked_not_would_have(db_path):
 
 
 def test_labeler_shows_redacted_arguments(db_path):
-    from agentguard import labels
+    from tainttrail import labels
 
     record(db_path, arguments={"command": "export T=ghp_16C7e42F292c6912E7710c838347Ae178B4a"})
     out: list[str] = []
@@ -121,8 +121,8 @@ def test_labeler_shows_redacted_arguments(db_path):
 
 
 def test_labels_never_touch_the_audit_chain(db_path):
-    from agentguard import audit, labels
-    from agentguard.db import connect
+    from tainttrail import audit, labels
+    from tainttrail.db import connect
 
     ids = [record(db_path) for _ in range(5)]
     before = [(r["id"], r["entry_hash"]) for r in
@@ -140,7 +140,7 @@ def test_labels_never_touch_the_audit_chain(db_path):
 
 
 def test_invalid_label_is_rejected(db_path):
-    from agentguard import labels
+    from tainttrail import labels
 
     with pytest.raises(ValueError):
         labels.set_label(record(db_path), "yes", db_path=db_path)
@@ -155,7 +155,7 @@ def _mix(db_path):
     hook: 20 path-signal BLOCKs -> 17 tp, 3 fp;  4 destructive REVIEWs -> 1 tp, 2 fp, 1 unsure
     mcp : 5 taint REVIEWs -> 3 tp, 2 fp;  2 unlabeled
     """
-    from agentguard import labels
+    from tainttrail import labels
 
     plan = ([("hook", Verdict.BLOCK, "path:**/.ssh/**", "tp")] * 17
             + [("hook", Verdict.BLOCK, "path:**/.ssh/**", "fp")] * 3
@@ -171,7 +171,7 @@ def _mix(db_path):
 
 
 def test_precision_math_on_a_known_mix(db_path):
-    from agentguard import labels
+    from tainttrail import labels
 
     _mix(db_path)
     p = labels.precision(db_path=db_path)
@@ -191,7 +191,7 @@ def test_precision_math_on_a_known_mix(db_path):
 
 
 def test_small_n_carries_an_explicit_warning(db_path):
-    from agentguard import labels
+    from tainttrail import labels
 
     _mix(db_path)
     p = labels.precision(db_path=db_path)
@@ -206,7 +206,7 @@ def test_small_n_carries_an_explicit_warning(db_path):
 
 
 def test_no_percentage_is_ever_printed_without_its_n(db_path):
-    from agentguard import labels
+    from tainttrail import labels
 
     _mix(db_path)
     text = labels.render_precision(labels.precision(db_path=db_path))
@@ -216,7 +216,7 @@ def test_no_percentage_is_ever_printed_without_its_n(db_path):
 
 
 def test_precision_is_part_of_report(db_path):
-    from agentguard import report
+    from tainttrail import report
 
     _mix(db_path)
     rep = report.build("1d", db_path=db_path)
@@ -226,7 +226,7 @@ def test_precision_is_part_of_report(db_path):
 
 
 def test_no_labels_yet_prints_a_hint_not_a_number(db_path):
-    from agentguard import labels
+    from tainttrail import labels
 
     record(db_path)
     text = labels.render_precision(labels.precision(db_path=db_path))
@@ -249,7 +249,7 @@ CREATE TABLE audit (
 
 def _phase_a_database(path: str) -> None:
     """A database as written before Phase E: two v1 rows, then two v2 (source) rows."""
-    from agentguard.audit import GENESIS, _entry_hash
+    from tainttrail.audit import GENESIS, _entry_hash
 
     conn = sqlite3.connect(path)
     conn.executescript(PHASE_A_SCHEMA)
@@ -271,8 +271,8 @@ def _phase_a_database(path: str) -> None:
 
 
 def test_migration_keeps_old_rows_verifying(db_path):
-    from agentguard import audit
-    from agentguard.db import connect
+    from tainttrail import audit
+    from tainttrail.db import connect
 
     _phase_a_database(db_path)
     conn = connect(db_path)
@@ -284,7 +284,7 @@ def test_migration_keeps_old_rows_verifying(db_path):
     assert audit.verify_chain(db_path) == (True, None)
     new = audit.last(1, db_path)[0]
     assert new["hash_v"] == audit.HASH_VERSION
-    from agentguard.versions import DETECTOR_VERSION
+    from tainttrail.versions import DETECTOR_VERSION
     assert new["detector_version"] == DETECTOR_VERSION and new["mode"] == "observe"
 
     conn.execute("UPDATE audit SET detector_version='forged' WHERE id=?", (rid,))
@@ -299,10 +299,10 @@ def test_migration_keeps_old_rows_verifying(db_path):
 async def test_gateway_and_hook_rows_record_versions_and_mode(upstream, db_path):
     from fastmcp import Client
 
-    from agentguard import audit
-    from agentguard.gateway import build_daemon
-    from agentguard.policy import Policy
-    from agentguard.versions import DETECTOR_VERSION, policy_version
+    from tainttrail import audit
+    from tainttrail.gateway import build_daemon
+    from tainttrail.policy import Policy
+    from tainttrail.versions import DETECTOR_VERSION, policy_version
 
     p = Policy()
     server, guard, engine = build_daemon(upstream, policy=p, db_path=db_path)
@@ -319,8 +319,8 @@ async def test_gateway_and_hook_rows_record_versions_and_mode(upstream, db_path)
 
 
 def test_policy_version_tracks_rule_changes_not_mode():
-    from agentguard.policy import Policy, from_dict
-    from agentguard.versions import policy_version
+    from tainttrail.policy import Policy, from_dict
+    from tainttrail.versions import policy_version
 
     base = policy_version(Policy())
     assert base.startswith("p-")
@@ -334,9 +334,9 @@ def test_detector_version_is_bumped_when_detection_code_changes():
     """The rule "bump DETECTOR_VERSION whenever detection logic changes", enforced.
 
     If this fails, detection code changed: bump DETECTOR_VERSION in
-    agentguard/versions.py and set DETECTOR_FINGERPRINT to the value below.
+    tainttrail/versions.py and set DETECTOR_FINGERPRINT to the value below.
     """
-    from agentguard import versions
+    from tainttrail import versions
 
     current = versions.detector_fingerprint()
     assert current == versions.DETECTOR_FINGERPRINT, (
@@ -346,9 +346,9 @@ def test_detector_version_is_bumped_when_detection_code_changes():
 
 
 def test_fingerprint_ignores_comments_but_not_code():
-    from agentguard import versions
+    from tainttrail import versions
 
-    src_dir = ROOT / "agentguard"
+    src_dir = ROOT / "tainttrail"
     tmp = Path(tempfile.mkdtemp(prefix="ag-fp-"))
     try:
         for name in versions.DETECTION_MODULES:
@@ -366,7 +366,7 @@ def test_fingerprint_ignores_comments_but_not_code():
 
 
 def test_report_warns_on_a_version_mix(db_path):
-    from agentguard import report
+    from tainttrail import report
 
     record(db_path, detector_version="2026.10.1")
     single = report.build("1d", db_path=db_path)
@@ -381,8 +381,8 @@ def test_report_warns_on_a_version_mix(db_path):
 
 
 def test_unversioned_legacy_rows_count_as_their_own_version(db_path):
-    from agentguard import report
-    from agentguard.db import connect
+    from tainttrail import report
+    from tainttrail.db import connect
 
     rid = record(db_path)
     record(db_path)
@@ -404,7 +404,7 @@ PLANTED_USER = "plantuser"
 
 @pytest.fixture
 def planted_identity(monkeypatch):
-    """Pretend the person running AgentGuard is `plantuser` at C:\\Users\\plantuser."""
+    """Pretend the person running TaintTrail is `plantuser` at C:\\Users\\plantuser."""
     for var in ("USERNAME", "USER", "LOGNAME"):
         monkeypatch.setenv(var, PLANTED_USER)
     monkeypatch.setenv("USERPROFILE", PLANTED_HOME)
@@ -412,8 +412,8 @@ def planted_identity(monkeypatch):
 
 
 def _plant(db_path):
-    from agentguard.hooks import HookEngine
-    from agentguard.policy import Policy
+    from tainttrail.hooks import HookEngine
+    from tainttrail.policy import Policy
 
     engine = HookEngine(Policy(), db_path=db_path)
     # Real hook traffic with everything in the arguments (which are never exported).
@@ -443,7 +443,7 @@ def _assert_clean(text: str):
 
 @pytest.mark.parametrize("suffix", ["csv", "json"])
 def test_export_contains_no_planted_secret_home_path_or_username(db_path, planted_identity, suffix):
-    from agentguard import export, labels, report
+    from tainttrail import export, labels, report
 
     _plant(db_path)
     first = labels.interruptions(db_path=db_path)[0]["id"]
@@ -458,7 +458,7 @@ def test_export_contains_no_planted_secret_home_path_or_username(db_path, plante
         assert "<HOME>" in text and "<USER>" in text and "redacted" in text
         if suffix == "csv":
             lines = text.splitlines()
-            assert lines[0].startswith("# agentguard export - window last 1d")
+            assert lines[0].startswith("# tainttrail export - window last 1d")
             assert "versions:" in lines[0]
             rows = list(csv.DictReader(lines[1:]))
             assert set(rows[0]) == set(export.FIELDS)
@@ -474,7 +474,7 @@ def test_export_contains_no_planted_secret_home_path_or_username(db_path, plante
 
 
 def test_export_header_flags_a_version_mix(db_path, planted_identity):
-    from agentguard import export, report
+    from tainttrail import export, report
 
     record(db_path, detector_version="2026.10.1")
     record(db_path, detector_version="2026.10.2")
@@ -487,7 +487,7 @@ def test_export_header_flags_a_version_mix(db_path, planted_identity):
 
 
 def test_scrub_units():
-    from agentguard.export import scrub
+    from tainttrail.export import scrub
 
     names = ["plantuser"]
     assert scrub(r"C:\Users\plantuser\proj\a.py", names) == r"<HOME>\proj\a.py"
@@ -502,14 +502,14 @@ def test_scrub_units():
 # CLI
 # =========================================================================
 def _cli(*argv):
-    from agentguard.cli import main
+    from tainttrail.cli import main
     return main(list(argv))
 
 
 @pytest.fixture
 def cli_home(monkeypatch):
     home = tempfile.mkdtemp(prefix="ag-e-cli-")
-    monkeypatch.setenv("AGENTGUARD_HOME", home)
+    monkeypatch.setenv("TAINTTRAIL_HOME", home)
     try:
         yield Path(home)
     finally:
@@ -535,7 +535,7 @@ def test_cli_fp_review_then_report_then_export(cli_home, monkeypatch, capsys, pl
     target = cli_home / "export.csv"
     assert _cli("report", "--since", "1d", "--export", str(target)) == 0
     assert "exported 2 decision(s)" in capsys.readouterr().out
-    assert target.read_text(encoding="utf-8").startswith("# agentguard export")
+    assert target.read_text(encoding="utf-8").startswith("# tainttrail export")
 
-    from agentguard import labels
+    from tainttrail import labels
     assert labels.labels_for([rid], None) == {rid: "fp"}

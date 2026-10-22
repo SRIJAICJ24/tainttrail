@@ -17,8 +17,8 @@ PAGE = ("Quarterly pricing sheet: the enterprise tier discount is forty two perc
 
 
 def _engine(db_path, **hooks):
-    from agentguard.hooks import HookEngine
-    from agentguard.policy import from_dict
+    from tainttrail.hooks import HookEngine
+    from tainttrail.policy import from_dict
 
     return HookEngine(from_dict({"hooks": hooks} if hooks else {}), db_path=db_path)
 
@@ -34,7 +34,7 @@ def post(tool, tool_input, response, tid="t1"):
 
 
 def result_rows(db_path):
-    from agentguard.db import connect
+    from tainttrail.db import connect
 
     return [dict(r) for r in connect(db_path).execute(
         "SELECT tool, signals FROM audit WHERE stage = 'TOOL_RESULT'").fetchall()]

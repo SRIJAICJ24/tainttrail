@@ -1,6 +1,6 @@
 """`status` and friends from any working directory.
 
-Regression (week 2): run from another folder, `agentguard status` printed
+Regression (week 2): run from another folder, `tainttrail status` printed
 "policy: <defaults>" although onboarding had recorded the policy file the daemon
 uses, and showed only its own package version - so it could disagree with what
 `report` showed from the audit rows without saying why.
@@ -24,18 +24,18 @@ ROOT = Path(__file__).resolve().parent.parent
 
 @pytest.fixture()
 def installed():
-    """A temp AGENTGUARD_HOME whose config names a policy file kept elsewhere,
+    """A temp TAINTTRAIL_HOME whose config names a policy file kept elsewhere,
     and an unrelated working directory with no policy in it."""
-    from agentguard import config as cfg
+    from tainttrail import config as cfg
 
     work = Path(tempfile.mkdtemp(prefix="ag-anywhere-"))
     home, elsewhere, policies = work / "home", work / "elsewhere", work / "policies"
     for d in (home, elsewhere, policies, work / "claude"):
         d.mkdir()
-    policy = policies / "agentguard.policy.yaml"
+    policy = policies / "tainttrail.policy.yaml"
     policy.write_text("enforcement: false\ndev_workspaces: [devproj]\n", encoding="utf-8")
-    cfg.save(cfg.Config(policy_file=str(policy)), home / "agentguard.json")
-    env = {**os.environ, "AGENTGUARD_HOME": str(home), "HOME": str(home),
+    cfg.save(cfg.Config(policy_file=str(policy)), home / "tainttrail.json")
+    env = {**os.environ, "TAINTTRAIL_HOME": str(home), "HOME": str(home),
            "CLAUDE_CONFIG_DIR": str(work / "claude"),
            "PYTHONPATH": child_pythonpath(ROOT)}
     yield {"work": work, "home": home, "cwd": elsewhere, "policy": policy, "env": env}
@@ -43,15 +43,15 @@ def installed():
 
 
 def _cli(installed, *args, timeout=300):
-    return subprocess.run([sys.executable, "-m", "agentguard.cli", *args],
+    return subprocess.run([sys.executable, "-m", "tainttrail.cli", *args],
                           cwd=installed["cwd"], env=installed["env"],
                           capture_output=True, text=True, timeout=timeout)
 
 
 def test_status_shows_the_configured_policy_and_versions(installed):
-    from agentguard import __version__
-    from agentguard.policy import load
-    from agentguard.versions import DETECTOR_VERSION, policy_version
+    from tainttrail import __version__
+    from tainttrail.policy import load
+    from tainttrail.versions import DETECTOR_VERSION, policy_version
 
     out = _cli(installed, "status")
     assert out.returncode == 0, out.stderr
@@ -59,26 +59,26 @@ def test_status_shows_the_configured_policy_and_versions(installed):
     assert "<defaults>" not in text
     assert str(installed["policy"]) in text
     after = text.split(str(installed["policy"]))[1].splitlines()
-    assert "policy_file in" in after[1] and "agentguard.json" in after[1], \
+    assert "policy_file in" in after[1] and "tainttrail.json" in after[1], \
         "says where the policy choice came from"
     assert __version__ in text and DETECTOR_VERSION in text
     assert policy_version(load(installed["policy"])) in text
 
 
 def test_status_names_the_package_location(installed):
-    import agentguard
+    import tainttrail
 
     out = _cli(installed, "status")
-    assert str(Path(agentguard.__file__).resolve().parent) in out.stdout
+    assert str(Path(tainttrail.__file__).resolve().parent) in out.stdout
 
 
 def test_the_daemon_health_answer_carries_its_versions(db_path):
     from starlette.testclient import TestClient
 
-    from agentguard import __version__
-    from agentguard.gateway import build_daemon
-    from agentguard.policy import Policy
-    from agentguard.versions import DETECTOR_VERSION, policy_version
+    from tainttrail import __version__
+    from tainttrail.gateway import build_daemon
+    from tainttrail.policy import Policy
+    from tainttrail.versions import DETECTOR_VERSION, policy_version
 
     policy = Policy()
     server, _guard, _engine = build_daemon(None, policy=policy, db_path=db_path)
@@ -90,7 +90,7 @@ def test_the_daemon_health_answer_carries_its_versions(db_path):
 
 
 def test_status_warns_when_the_daemon_runs_other_code():
-    from agentguard.cli import _version_mismatches
+    from tainttrail.cli import _version_mismatches
 
     mine = {"version": "0.3.0", "detector_version": "2026.10.5", "policy_version": "p-1"}
     assert _version_mismatches(mine, dict(mine)) == []
@@ -126,8 +126,8 @@ def test_replay_from_an_unrelated_folder(installed):
 
 
 def test_report_uses_the_configured_dev_workspaces(installed, monkeypatch):
-    from agentguard import report
+    from tainttrail import report
 
-    monkeypatch.setenv("AGENTGUARD_HOME", str(installed["home"]))
+    monkeypatch.setenv("TAINTTRAIL_HOME", str(installed["home"]))
     monkeypatch.chdir(installed["cwd"])
     assert report._dev_workspaces(None) == ["devproj"]

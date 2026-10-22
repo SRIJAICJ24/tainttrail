@@ -1,11 +1,11 @@
 name: Attack scenario
-description: A way an agent can be attacked or misuse its tools that AgentGuard should catch (or a variant it misses).
+description: A way an agent can be attacked or misuse its tools that TaintTrail should catch (or a variant it misses).
 labels: [attack-scenario]
 body:
   - type: markdown
     attributes:
       value: |
-        Scenarios become simulator entries (`agentguard simulate`) and regression tests. Use
+        Scenarios become simulator entries (`tainttrail simulate`) and regression tests. Use
         **fake data only**: example.com hosts, made-up keys built at run time, no real targets.
 
         If the scenario **bypasses a hard-enforced rule** (credential files, secret
@@ -30,7 +30,7 @@ body:
   - type: dropdown
     id: today
     attributes:
-      label: What AgentGuard does today
+      label: What TaintTrail does today
       options:
         - Catches it (I'm adding coverage / a test)
         - Flags it at the wrong level (e.g. logs when it should block)

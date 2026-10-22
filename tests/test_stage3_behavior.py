@@ -9,7 +9,7 @@ from fastmcp.exceptions import ToolError
 
 def test_cold_monitor_does_not_fire_without_a_baseline():
     """A system with no history must not block the first calls it ever sees."""
-    from agentguard.behavior import BehaviorMonitor
+    from tainttrail.behavior import BehaviorMonitor
 
     monitor = BehaviorMonitor()
     for i in range(3):
@@ -20,7 +20,7 @@ def test_cold_monitor_does_not_fire_without_a_baseline():
 
 def test_hard_ceiling_catches_a_runaway_loop_with_no_baseline():
     """The absolute ceiling exists precisely for the cold-start case."""
-    from agentguard.behavior import HARD_RATE_CEILING, BehaviorMonitor
+    from tainttrail.behavior import HARD_RATE_CEILING, BehaviorMonitor
 
     monitor = BehaviorMonitor()
     fired = False
@@ -31,7 +31,7 @@ def test_hard_ceiling_catches_a_runaway_loop_with_no_baseline():
 
 
 def test_velocity_spike_against_a_learned_baseline():
-    from agentguard.behavior import MIN_OBSERVATIONS, BehaviorMonitor
+    from tainttrail.behavior import MIN_OBSERVATIONS, BehaviorMonitor
 
     monitor = BehaviorMonitor()
     # Teach a quiet baseline: one call per window, well separated in time.
@@ -51,7 +51,7 @@ def test_velocity_spike_against_a_learned_baseline():
 
 def test_anomalous_windows_do_not_train_the_baseline():
     """An attack must not teach the monitor that the attack is normal."""
-    from agentguard.behavior import BehaviorMonitor
+    from tainttrail.behavior import BehaviorMonitor
 
     monitor = BehaviorMonitor()
     for i in range(8):
@@ -76,7 +76,7 @@ def test_slow_ramp_cannot_train_the_baseline_upward():
     The baseline is now sampled at most once per window, so a ramp inside a window
     still trips.
     """
-    from agentguard.behavior import BehaviorMonitor
+    from tainttrail.behavior import BehaviorMonitor
 
     monitor = BehaviorMonitor()
     # Establish a quiet baseline over several separate windows.
@@ -92,7 +92,7 @@ def test_slow_ramp_cannot_train_the_baseline_upward():
 
 
 def test_kill_switch_locks_and_releases():
-    from agentguard.behavior import BehaviorMonitor
+    from tainttrail.behavior import BehaviorMonitor
 
     monitor = BehaviorMonitor()
     assert monitor.is_locked("s1") is None
@@ -104,8 +104,8 @@ def test_kill_switch_locks_and_releases():
 
 async def test_kill_switch_blocks_every_call_in_that_session(upstream, db_path):
     """The kill switch is absolute - checked before policy, RBAC or scoring."""
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
 
     p = Policy()
     p.enforcement = True
@@ -116,7 +116,7 @@ async def test_kill_switch_blocks_every_call_in_that_session(upstream, db_path):
         await client.call_tool("filesystem.read", {"path": "notes.txt"})
         session_id = guard.taints.sessions[0] if guard.taints.sessions else None
         # Lock every session the gateway has seen.
-        from agentguard.db import connect
+        from tainttrail.db import connect
         rows = connect(db_path).execute(
             "SELECT DISTINCT session_id FROM audit WHERE session_id IS NOT NULL"
         ).fetchall()
@@ -129,7 +129,7 @@ async def test_kill_switch_blocks_every_call_in_that_session(upstream, db_path):
 
 
 def test_snapshot_reports_live_rates():
-    from agentguard.behavior import BehaviorMonitor
+    from tainttrail.behavior import BehaviorMonitor
 
     monitor = BehaviorMonitor()
     monitor.observe("a", "t1")

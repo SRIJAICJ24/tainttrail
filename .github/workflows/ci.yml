@@ -20,12 +20,12 @@ jobs:
       PYTHONUTF8: "1"
     steps:
       # Tests and `simulate` write state. Keep it inside the runner's temp dir,
-      # never in a real ~/.agentguard or ~/.claude. (The `runner` context isn't
+      # never in a real ~/.tainttrail or ~/.claude. (The `runner` context isn't
       # available in job-level env, so this is set from a step.)
       - name: State in the runner's temp dir
         shell: bash
         run: |
-          echo "AGENTGUARD_HOME=$RUNNER_TEMP/agentguard-home" >> "$GITHUB_ENV"
+          echo "TAINTTRAIL_HOME=$RUNNER_TEMP/tainttrail-home" >> "$GITHUB_ENV"
           echo "CLAUDE_CONFIG_DIR=$RUNNER_TEMP/claude-config" >> "$GITHUB_ENV"
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -38,7 +38,7 @@ jobs:
       - name: Tests
         run: python -m pytest tests -q
       - name: Red-team simulator (must score 100)
-        run: python -m agentguard.cli simulate --min-score 100 --db "${{ runner.temp }}/sim.db"
+        run: python -m tainttrail.cli simulate --min-score 100 --db "${{ runner.temp }}/sim.db"
 
   wheel:
     name: Wheel works without the source tree
@@ -57,10 +57,10 @@ jobs:
       - name: Run from outside the checkout
         working-directory: ${{ runner.temp }}
         env:
-          AGENTGUARD_HOME: ${{ runner.temp }}/agentguard-home
+          TAINTTRAIL_HOME: ${{ runner.temp }}/tainttrail-home
         run: |
-          "$RUNNER_TEMP/venv/bin/agentguard" --version
-          "$RUNNER_TEMP/venv/bin/agentguard" simulate --min-score 100 --db "$RUNNER_TEMP/sim.db"
-          "$RUNNER_TEMP/venv/bin/agentguard" scan "the weather is nice in paris today"
-          "$RUNNER_TEMP/venv/bin/agentguard" demo
-          "$RUNNER_TEMP/venv/bin/agentguard" status
+          "$RUNNER_TEMP/venv/bin/tainttrail" --version
+          "$RUNNER_TEMP/venv/bin/tainttrail" simulate --min-score 100 --db "$RUNNER_TEMP/sim.db"
+          "$RUNNER_TEMP/venv/bin/tainttrail" scan "the weather is nice in paris today"
+          "$RUNNER_TEMP/venv/bin/tainttrail" demo
+          "$RUNNER_TEMP/venv/bin/tainttrail" status

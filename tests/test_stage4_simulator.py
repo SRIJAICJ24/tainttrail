@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentguard.simulator import (
+from tainttrail.simulator import (
     RedTeamSimulator,
     Scenario,
     default_scenarios,
@@ -18,8 +18,8 @@ from agentguard.simulator import (
 
 @pytest.fixture
 def sim(upstream, db_path):
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
 
     p = Policy()
     p.enforcement = True
@@ -60,8 +60,8 @@ async def test_score_punishes_a_block_everything_gateway(upstream, db_path):
     A gateway configured to deny every tool detects every attack, but destroys the
     benign half - so the score must fall, not rise.
     """
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
 
     paranoid = Policy()
     paranoid.enforcement = True
@@ -78,8 +78,8 @@ async def test_score_punishes_a_block_everything_gateway(upstream, db_path):
 
 async def test_score_punishes_a_disabled_gateway(upstream, db_path):
     """The mirror case: a gateway that allows everything scores 50 too."""
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
 
     permissive = Policy()
     permissive.enforcement = False             # observe only: nothing is stopped
@@ -103,7 +103,7 @@ async def test_report_serialises_for_the_dashboard_and_ci(sim):
 
 async def test_custom_scenario_can_be_supplied(sim):
     """The simulator is extensible - users can add their own attack patterns."""
-    from agentguard.simulator import EXPECT_BLOCK
+    from tainttrail.simulator import EXPECT_BLOCK
 
     custom = Scenario(
         "custom_kube_config", "credential_access", EXPECT_BLOCK,

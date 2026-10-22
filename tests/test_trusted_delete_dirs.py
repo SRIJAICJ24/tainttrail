@@ -20,8 +20,8 @@ REAL_9 = (f'SP="{SP}"; rm -f "$SP/online/w"*.log; (wsl.exe -d Ubuntu -e bash -c 
 
 
 def _engine(db_path, trusted=None):
-    from agentguard.hooks import HookEngine
-    from agentguard.policy import from_dict
+    from tainttrail.hooks import HookEngine
+    from tainttrail.policy import from_dict
 
     hooks = {} if trusted is None else {"trusted_delete_dirs": trusted}
     return HookEngine(from_dict({"hooks": hooks}), db_path=db_path)
@@ -90,7 +90,7 @@ def test_nested_deletes_in_temp_are_recognised_too(db_path, command):
 
 @pytest.mark.parametrize("bad", ["~", "~/", "/", "C:/", "C:\\", "$HOME", "/home", "D:"])
 def test_trusting_a_home_or_root_is_refused(bad):
-    from agentguard.policy import from_dict
+    from tainttrail.policy import from_dict
 
     with pytest.raises(ValueError):
         from_dict({"hooks": {"trusted_delete_dirs": [bad]}})

@@ -62,7 +62,7 @@ async def test_second_tool_also_forwards(gateway):
 
 async def test_gateway_records_decisions(gateway, db_path):
     """Every forwarded call leaves an audit entry - the proxy is never silent."""
-    from agentguard import audit
+    from tainttrail import audit
 
     proxy, _guard = gateway
     async with Client(proxy) as client:
@@ -92,7 +92,7 @@ async def test_client_for_declares_no_roots():
     """
     from fastmcp.server.providers.proxy import ProxyClient
 
-    from agentguard.gateway import _client_for
+    from tainttrail.gateway import _client_for
 
     client = _client_for({"mcpServers": {"f": {"command": sys.executable, "args": ["-c", "pass"]}}})
 
@@ -108,12 +108,12 @@ async def test_client_for_declares_no_roots():
 async def test_proxy_does_not_hang_with_real_filesystem_server(db_path):
     """End-to-end regression test for the `roots/list` hang, against the real
     `@modelcontextprotocol/server-filesystem` - the server this was first
-    found against. Without the fix in `agentguard.gateway._client_for`, this
+    found against. Without the fix in `tainttrail.gateway._client_for`, this
     call hangs indefinitely and the `wait_for` below raises `TimeoutError`.
     """
-    from agentguard.gateway import build_gateway
+    from tainttrail.gateway import build_gateway
 
-    sandbox = tempfile.mkdtemp(prefix="agentguard-roots-test-")
+    sandbox = tempfile.mkdtemp(prefix="tainttrail-roots-test-")
     try:
         (Path(sandbox) / "notes.md").write_text("hello from sandbox", encoding="utf-8")
 
@@ -150,7 +150,7 @@ async def test_proxy_forwards_calls_with_fake_roots_requesting_server(db_path):
     variable-latency server - see the npx-based test above), but guards the
     general mechanism for any roots-requesting stdio server.
     """
-    from agentguard.gateway import build_gateway
+    from tainttrail.gateway import build_gateway
 
     port = _free_port()
     upstream = {"mcpServers": {"roots": {

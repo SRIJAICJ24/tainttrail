@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. AgentGuard is judged on two numbers: how many real attacks it stops,
+Thanks for helping. TaintTrail is judged on two numbers: how many real attacks it stops,
 and how often it interrupts real work for nothing. A change should move one of them
 without hurting the other, and should show evidence for both.
 
@@ -10,16 +10,16 @@ without hurting the other, and should show evidence for both.
 python -m pip install -e ".[dev]"
 ```
 
-**Never run tests or `simulate` against your real home.** Point AgentGuard and Claude Code at
+**Never run tests or `simulate` against your real home.** Point TaintTrail and Claude Code at
 throwaway folders in the same shell:
 
 ```bash
-export AGENTGUARD_HOME="$(mktemp -d)" CLAUDE_CONFIG_DIR="$(mktemp -d)"
+export TAINTTRAIL_HOME="$(mktemp -d)" CLAUDE_CONFIG_DIR="$(mktemp -d)"
 python -m pytest tests -q
-python -m agentguard.cli simulate --min-score 100
+python -m tainttrail.cli simulate --min-score 100
 ```
 
-On Windows PowerShell, set `$env:AGENTGUARD_HOME` and `$env:CLAUDE_CONFIG_DIR` to new folders
+On Windows PowerShell, set `$env:TAINTTRAIL_HOME` and `$env:CLAUDE_CONFIG_DIR` to new folders
 under `$env:TEMP` first.
 
 ## Rules for changes
@@ -28,10 +28,10 @@ under `$env:TEMP` first.
    Say in the pull request how you checked that. For example, run the new test file
    against `git archive HEAD` in a temp folder.
 2. **Detection changes bump `DETECTOR_VERSION`.** `tests/test_readiness_e.py` fingerprints
-   the detection modules and fails until you bump the version in `agentguard/versions.py`
+   the detection modules and fails until you bump the version in `tainttrail/versions.py`
    and paste in the new fingerprint. Every audit row records the version, so numbers from
    different versions are never mixed silently.
-3. **False-positive fixes need a measurement.** Run `agentguard replay` on your own
+3. **False-positive fixes need a measurement.** Run `tainttrail replay` on your own
    transcripts before and after the change (it is read-only), and put the before/after
    counts in the pull request. Include the attack cases that must still fire. Each
    "quiet" case in `tests/test_week2_accuracy.py` sits next to a "still caught" case.
@@ -46,5 +46,5 @@ under `$env:TEMP` first.
 ## Where things are
 
 `README.md` has the project layout. Detection logic lives in the modules listed in
-`agentguard/versions.py` (`DETECTION_MODULES`). `docs/week-log.md` records each frozen
+`tainttrail/versions.py` (`DETECTION_MODULES`). `docs/week-log.md` records each frozen
 measurement install.

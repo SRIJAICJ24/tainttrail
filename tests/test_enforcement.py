@@ -16,8 +16,8 @@ from conftest import ATTACK_RULE, POISON_QUERY, text_of
 
 
 async def test_observe_mode_logs_but_does_not_block(upstream, db_path):
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
 
     p = Policy()
     p.enforcement = False
@@ -35,9 +35,9 @@ async def test_observe_mode_logs_but_does_not_block(upstream, db_path):
 
 
 async def test_observe_mode_still_records_the_full_decision(upstream, db_path):
-    from agentguard import audit
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
+    from tainttrail import audit
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
 
     p = Policy()
     p.enforcement = False
@@ -55,8 +55,8 @@ async def test_observe_mode_still_records_the_full_decision(upstream, db_path):
 
 
 async def test_enforcing_mode_blocks_the_same_call(upstream, db_path):
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
 
     p = Policy()
     p.enforcement = True
@@ -70,9 +70,9 @@ async def test_enforcing_mode_blocks_the_same_call(upstream, db_path):
 async def test_observe_mode_still_quarantines_memory(upstream, db_path):
     """Observe mode does not stop the upstream write, but the ledger still records
     the item so the reviewer sees what happened."""
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
-    from agentguard.quarantine import QuarantinedMemoryLedger
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
+    from tainttrail.quarantine import QuarantinedMemoryLedger
 
     p = Policy()
     p.enforcement = False
@@ -91,8 +91,8 @@ async def test_observe_mode_still_quarantines_memory(upstream, db_path):
 
 
 async def test_exfiltration_policy_can_escalate_to_block(upstream, db_path):
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import Policy
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import Policy
 
     p = Policy()
     p.enforcement = True

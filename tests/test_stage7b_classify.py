@@ -34,7 +34,7 @@ def _csv_of_emails(n: int) -> str:
 # checksums and entity counting
 # =========================================================================
 def test_luhn_distinguishes_a_card_from_a_random_16_digit_number():
-    from agentguard.classify import find_entities, luhn_valid
+    from tainttrail.classify import find_entities, luhn_valid
 
     assert luhn_valid("4111111111111111")
     assert not luhn_valid("4111111111111112")
@@ -44,7 +44,7 @@ def test_luhn_distinguishes_a_card_from_a_random_16_digit_number():
 
 
 def test_verhoeff_validates_aadhaar():
-    from agentguard.classify import find_entities, verhoeff_valid
+    from tainttrail.classify import find_entities, verhoeff_valid
 
     assert verhoeff_valid("234123412346")        # valid Verhoeff check digit
     assert not verhoeff_valid("234123412345")
@@ -53,7 +53,7 @@ def test_verhoeff_validates_aadhaar():
 
 
 def test_pan_email_and_phone_are_counted():
-    from agentguard.classify import find_entities
+    from tainttrail.classify import find_entities
 
     kinds = sorted(e.kind for e in find_entities(
         "PAN ABCDE1234F, mail a.b@example.com, call +91 98765 43210 or (415) 555-2671"
@@ -62,14 +62,14 @@ def test_pan_email_and_phone_are_counted():
 
 
 def test_card_digits_are_not_double_counted_as_a_phone():
-    from agentguard.classify import find_entities
+    from tainttrail.classify import find_entities
 
     assert [e.kind for e in find_entities(f"pay with 4111111111111111")] == ["card"]
 
 
 def test_labels_follow_volume_not_presence():
-    from agentguard.classify import classify_text
-    from agentguard.policy import Policy
+    from tainttrail.classify import classify_text
+    from tainttrail.policy import Policy
 
     p = Policy()
     assert classify_text("the weather is nice", p).label == "PUBLIC"
@@ -82,7 +82,7 @@ def test_labels_follow_volume_not_presence():
 
 
 def test_classification_policy_parses_and_rejects_bad_rules():
-    from agentguard.policy import from_dict
+    from tainttrail.policy import from_dict
 
     p = from_dict({"classification": {
         "thresholds": {"confidential": 3, "pii": 5},
@@ -133,8 +133,8 @@ async def test_a_csv_of_200_emails_to_an_external_sink_is_blocked(gateway):
 
 
 async def test_redact_rewrites_what_reaches_the_upstream(upstream, db_path):
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import from_dict
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import from_dict
 
     policy = from_dict({"enforcement": True, "classification": {
         "actions": {"PII": "redact"},
@@ -159,8 +159,8 @@ async def test_redact_rewrites_what_reaches_the_upstream(upstream, db_path):
 
 async def test_redact_in_observe_mode_only_logs(upstream, db_path):
     """Observe mode never rewrites traffic - it records what it would have done."""
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import from_dict
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import from_dict
 
     policy = from_dict({"classification": {"actions": {"PII": "redact"}}})
     proxy, guard = build_gateway(upstream, policy=policy, db_path=db_path)
@@ -174,9 +174,9 @@ async def test_redact_in_observe_mode_only_logs(upstream, db_path):
 
 
 async def test_per_role_limit_is_applied(upstream, db_path):
-    from agentguard.gateway import build_gateway
-    from agentguard.identity import AgentIdentity
-    from agentguard.policy import from_dict
+    from tainttrail.gateway import build_gateway
+    from tainttrail.identity import AgentIdentity
+    from tainttrail.policy import from_dict
 
     policy = from_dict({"enforcement": True, "classification": {
         "max_label": {"intern": {"exfiltration": "PUBLIC"}},
@@ -211,8 +211,8 @@ async def test_ordinary_tier_calls_are_not_classified(gateway):
 
 
 async def test_classification_can_be_switched_off(upstream, db_path):
-    from agentguard.gateway import build_gateway
-    from agentguard.policy import from_dict
+    from tainttrail.gateway import build_gateway
+    from tainttrail.policy import from_dict
 
     policy = from_dict({"enforcement": True, "classification": {"enabled": False}})
     proxy, guard = build_gateway(upstream, policy=policy, db_path=db_path)
@@ -226,8 +226,8 @@ async def test_classification_can_be_switched_off(upstream, db_path):
 # latency
 # =========================================================================
 def test_classification_stays_inside_the_fast_path_budget():
-    from agentguard.classify import DataClassifier
-    from agentguard.policy import Policy
+    from tainttrail.classify import DataClassifier
+    from tainttrail.policy import Policy
 
     clf = DataClassifier(Policy())
     tiers = ["exfiltration", "propagation"]
@@ -247,8 +247,8 @@ def test_a_write_destination_is_not_an_unscanned_attachment():
     """Regression: a file-write tool's `file_path` is where the content goes, not
     an attachment, so a propagation-only call must not log dlp:unscanned_attachment.
     Found when Claude Code's Write tool started flowing through the hooks."""
-    from agentguard.classify import DataClassifier
-    from agentguard.policy import Policy
+    from tainttrail.classify import DataClassifier
+    from tainttrail.policy import Policy
 
     out = DataClassifier(Policy()).assess(
         "Write", {"file_path": "/home/me/project/notes.md", "content": "hello"},
