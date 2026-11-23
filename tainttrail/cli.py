@@ -481,6 +481,24 @@ def cmd_simulate(args: argparse.Namespace) -> int:
     return 0 if report.score >= args.min_score else 1
 
 
+def cmd_setup(args: argparse.Namespace) -> int:
+    from tainttrail import installer
+
+    print(_c("TaintTrail setup", "bold"))
+    result = installer.setup(enforce=args.enforce, start=not args.no_start,
+                             autostart=not args.no_autostart, port=args.port)
+    print("\n".join(result.lines))
+    return 0 if result.ok else 1
+
+
+def cmd_uninstall(args: argparse.Namespace) -> int:
+    from tainttrail import installer
+
+    result = installer.uninstall()
+    print("\n".join(result.lines))
+    return 0 if result.ok else 1
+
+
 def cmd_migrate(args: argparse.Namespace) -> int:
     from tainttrail import migrate
 
@@ -857,6 +875,24 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--include-dev", action="store_true",
                    help="also count hook traffic from the policy's dev_workspaces")
     s.set_defaults(func=cmd_report)
+
+    s = sub.add_parser(
+        "setup",
+        help="install everything in one go: config, policy, Claude Code hooks, background "
+             "daemon with auto-start (no admin rights), then a health check",
+    )
+    s.add_argument("--enforce", action="store_true",
+                   help="block/ask on risky calls right away (default: observe mode)")
+    s.add_argument("--port", type=int, default=None, help="daemon port (default 9000)")
+    s.add_argument("--no-start", action="store_true", help="don't start the daemon")
+    s.add_argument("--no-autostart", action="store_true", help="don't start it at login")
+    s.set_defaults(func=cmd_setup)
+
+    s = sub.add_parser(
+        "uninstall",
+        help="remove the hooks, stop the daemon and its auto-start (keeps your audit log)",
+    )
+    s.set_defaults(func=cmd_uninstall)
 
     s = sub.add_parser(
         "migrate",

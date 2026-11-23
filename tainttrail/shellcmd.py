@@ -276,34 +276,90 @@ def normalize_dir(entry: str) -> str:
     return _norm(e).rstrip("/")
 
 
+def is_project_relative(entry: str) -> bool:
+    """`Screenshots` or `./build/out`: a folder inside whichever project the agent
+    is working in (the hook's cwd), rather than one fixed place."""
+    e = entry.strip().replace("\\", "/")
+    return not (e.startswith(("/", "~", "$", "%")) or re.match(r"^[A-Za-z]:", e))
+
+
 def validate_trusted_dir(entry: str) -> str:
     """Normalized entry, or ValueError for a home folder, a drive or filesystem
-    root, or a top-level folder - trusting deletes there would trust everything."""
+    root, or a top-level folder - trusting deletes there would trust everything.
+    A project-relative entry needs one real folder name and no `..`."""
     norm = normalize_dir(entry)
-    parts = [p for p in norm.split("/") if p]
+    parts = [p for p in norm.split("/") if p and p != "."]
+    if is_project_relative(entry):
+        if not parts or ".." in parts:
+            raise ValueError(f"hooks.trusted_delete_dirs: {entry!r} - a project folder needs "
+                             f"a name, such as build or Screenshots, without '..'")
+        return "/".join(parts)
     if ".." in parts or len(parts) < 2 or norm in ("", HOME):
         raise ValueError(f"hooks.trusted_delete_dirs: {entry!r} is too broad - name a "
                          f"specific folder such as ~/myproject/build")
     return norm
 
 
+def trusted_roots(entries: list[str], project: str | None) -> tuple[str, ...]:
+    """Normalized trusted folders for one call: fixed entries as they are,
+    project-relative ones joined to the session's project folder (and skipped
+    when there is no project folder to join them to)."""
+    roots = []
+    for entry in entries:
+        if is_project_relative(entry):
+            if project:
+                roots.append(_norm(posixpath.join(project.replace("\\", "/"),
+                                                  validate_trusted_dir(entry))).rstrip("/"))
+        else:
+            roots.append(normalize_dir(entry))
+    return tuple(roots)
+
+
 def _strictly_inside(path: str, root: str) -> bool:
     p = _norm(path).rstrip("/")
     if ".." in p.split("/"):
         return False
+    p = posixpath.normpath(p)                               # drop `./`, after the `..` check
     return p.startswith(root + "/") and len(p) > len(root) + 1
 
 
 def _target_kind(word: str, env: dict[str, str], cwd: str | None,
-                 trusted: tuple[str, ...]) -> str | None:
+                 trusted: tuple[str, ...], project: str | None = None) -> str | None:
     full = _resolve(word, env, cwd)
     if full is None:
-        return None
+        # A relative target before any `cd`: it lands in the session's project
+        # folder. That never counts as temp (a project under /tmp is a project),
+        # only as inside a trusted folder.
+        if project is None or cwd is not None:
+            return None
+        inside = _resolve(word, env, project)
+        return "trusted" if inside and any(_strictly_inside(inside, t) for t in trusted) else None
     if HOME not in full and strictly_inside_temp(full):
         return "temp"
     if any(_strictly_inside(full, t) for t in trusted):
         return "trusted"
     return None
+
+
+def _split_blocks(cmd: SimpleCommand) -> list[SimpleCommand]:
+    """`if (Test-Path $t) { Remove-Item $t -Recurse }` holds two commands; split at
+    standalone braces so each part is judged by its own verb."""
+    if "{" not in cmd.words and "}" not in cmd.words:
+        return [cmd]
+    parts: list[list[str]] = [[]]
+    for w in cmd.words:
+        if w in ("{", "}"):
+            parts.append([])
+        else:
+            parts[-1].append(w)
+    out = []
+    for words in parts:
+        while words and words[0].lower() in _PREFIX_WORDS:
+            words = words[1:]
+        if words:
+            out.append(SimpleCommand(cmd.start, cmd.end, words, _verb(words[0].lstrip("(")),
+                                     cmd.redirect_targets))
+    return out
 
 
 def _target_in_temp(word: str, env: dict[str, str], cwd: str | None) -> bool:
@@ -369,17 +425,23 @@ def _nested_script(command: str, cmd: SimpleCommand) -> tuple[int, int] | None:
     return (m.end(), i) if i <= cmd.end else None
 
 
-def delete_checks(command: str, trusted: tuple[str, ...] = ()) -> list[DeleteCheck]:
+_UNKNOWN_CWD = "<unknown-cwd>"
+
+
+def delete_checks(command: str, trusted: tuple[str, ...] = (),
+                  project: str | None = None) -> list[DeleteCheck]:
     """Every delete command in `command`, and whether all its targets are in temp.
 
-    A relative target counts only after a `cd` into temp in the same command. The
-    session's working directory never does: a project that happens to live under
-    /tmp is still a project, and deleting inside it keeps going to REVIEW.
+    A relative target counts as temp only after a `cd` into temp in the same
+    command. The session's working directory (`project`) never does: a project that
+    happens to live under /tmp is still a project. It is used only to place
+    relative targets inside project-relative trusted folders, and only until a
+    `cd` - after one the parser can't follow, relative targets are unknown.
     """
     env: dict[str, str] = {}
     here: str | None = None
     checks: list[DeleteCheck] = []
-    for cmd in simple_commands(command):
+    for cmd in (part for whole in simple_commands(command) for part in _split_blocks(whole)):
         words = cmd.words[1:] if cmd.words[:1] == ["export"] else cmd.words
         if not words:
             continue
@@ -413,9 +475,10 @@ def delete_checks(command: str, trusted: tuple[str, ...] = ()) -> list[DeleteChe
             dest = next((a for a in cmd.args if not a.startswith("-")), None)
             exp = _expand(dest, env) if dest else None
             if exp is None or not exp.complete:
-                here = None
+                here = _UNKNOWN_CWD
             else:
-                here = _join(here, exp.fixed)       # home paths too: trusted folders
+                joined = _join(here if here != _UNKNOWN_CWD else None, exp.fixed)
+                here = joined if joined is not None else _UNKNOWN_CWD
             continue
         nested = _nested_script(command, cmd)
         if nested is not None:
@@ -427,29 +490,36 @@ def delete_checks(command: str, trusted: tuple[str, ...] = ()) -> list[DeleteChe
             continue
         if cmd.verb in _DELETE_VERBS:
             targets = _delete_targets(cmd)
-            kinds = [_target_kind(t, env, here, trusted) for t in targets]
+            kinds = [_target_kind(t, env, here, trusted, project) for t in targets]
             kind = None if not kinds or None in kinds else (
                 "temp" if set(kinds) == {"temp"} else "trusted")
             checks.append(DeleteCheck(cmd.start, cmd.end, targets, kind == "temp", kind))
     return checks
 
 
-def safe_delete_kinds(command: str, match_starts: list[int],
-                      trusted: tuple[str, ...] = (), *, allow_temp: bool = True) -> set[str] | None:
+def safe_delete_kinds(command: str, matches: list[int] | list[tuple[int, int]],
+                      trusted: tuple[str, ...] = (), *, allow_temp: bool = True,
+                      project: str | None = None) -> set[str] | None:
     """The kinds of safe folder ("temp", "trusted") every destructive-pattern match
-    deletes into, or None if any match isn't provably a delete inside one."""
-    if not match_starts:
+    deletes into, or None if any match isn't provably a delete inside one.
+
+    `matches` are (start, end) spans of the pattern matches (a bare start counts
+    as a one-character span). Every delete a match's text overlaps must be safe,
+    not only the one where it starts: `Remove-Item ... -Recurse` is matched
+    greedily to the end of the line, across every command on it.
+    """
+    if not matches:
         return None
-    checks = delete_checks(command, tuple(trusted))
+    checks = delete_checks(command, tuple(trusted), project)
     kinds: set[str] = set()
-    for pos in match_starts:
-        owners = [c for c in checks if c.start <= pos < c.end]
-        if not owners:
+    for m in matches:
+        start, end = (m, m + 1) if isinstance(m, int) else m
+        if not any(c.start <= start < c.end for c in checks):
             return None
-        owner = min(owners, key=lambda c: c.end - c.start)       # innermost
-        if owner.kind is None or (owner.kind == "temp" and not allow_temp):
-            return None
-        kinds.add(owner.kind)
+        for check in (c for c in checks if c.start < end and c.end > start):
+            if check.kind is None or (check.kind == "temp" and not allow_temp):
+                return None
+            kinds.add(check.kind)
     return kinds
 
 

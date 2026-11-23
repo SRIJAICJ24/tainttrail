@@ -233,7 +233,7 @@ DEFAULT_SELF_PROTECT_COMMANDS: list[str] = [
     r"\bschtasks\b[^\n]*/(delete|end|change)\b[^\n]*tainttrail",
     r"\bsystemctl\s+--user\s+(stop|disable|mask|kill)\s+tainttrail",
     r"\blaunchctl\s+(unload|remove|bootout)\b[^\n]*tainttrail",
-    r"\btainttrail(\.cli)?\s+(uninstall-hooks|unlock)\b",
+    r"\btainttrail(\.cli)?\s+(uninstall-hooks|uninstall|unlock|daemon\s+stop)\b",
     r"\bdisableAllHooks\b",
 ]
 

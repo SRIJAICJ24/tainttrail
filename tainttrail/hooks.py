@@ -76,7 +76,7 @@ from tainttrail.scanner import (
     scan_paths,
 )
 from tainttrail.scope import ScopeStore
-from tainttrail.shellcmd import normalize_dir, only_mentioned, safe_delete_kinds
+from tainttrail.shellcmd import only_mentioned, safe_delete_kinds, trusted_roots
 from tainttrail.sinks import SinkClassifier
 from tainttrail.taint import UNTRUSTED, TaintMap, TaintRegistry
 from tainttrail.workspace import workspace_label
@@ -460,7 +460,7 @@ class HookEngine:
                               and mcp_touches_protected(self.policy, tiers, tool_input))
 
         if tool in SHELL_TOOLS:
-            return self._map_shell(tool, str(tool_input.get("command", "")))
+            return self._map_shell(tool, str(tool_input.get("command", "")), payload.get("cwd"))
 
         if tool in USER_FACING_TOOLS:
             # Shown to the user, not sent anywhere: never a sink, and naming a
@@ -496,7 +496,7 @@ class HookEngine:
         # let the policy's sink globs place it, so custom names stay configurable.
         return MappedCall(tool, tool, dict(tool_input), self.policy.sink_tiers(tool))
 
-    def _map_shell(self, tool: str, command: str) -> MappedCall:
+    def _map_shell(self, tool: str, command: str, cwd: str | None = None) -> MappedCall:
         hooks = self.policy.hooks
         call = MappedCall(tool, tool, {"command": command}, [TIER_ORDINARY])
         call.paths_by_token = True
@@ -541,10 +541,12 @@ class HookEngine:
         if matches("propagation"):
             call.tiers.append(TIER_PROPAGATION)
         destructive = matches("destructive")
-        starts = [m.start() for p in destructive for m in re.finditer(p, command, re.IGNORECASE)]
-        trusted = tuple(normalize_dir(d) for d in hooks.trusted_delete_dirs)
-        kinds = safe_delete_kinds(command, starts, trusted,
-                                  allow_temp=hooks.temp_deletes_ok) if destructive else None
+        starts = [m.span() for p in destructive for m in re.finditer(p, command, re.IGNORECASE)]
+        # project-relative entries ("Screenshots") are placed in the session's
+        # project folder; the cwd is used for nothing else here
+        trusted = trusted_roots(hooks.trusted_delete_dirs, cwd)
+        kinds = safe_delete_kinds(command, starts, trusted, allow_temp=hooks.temp_deletes_ok,
+                                  project=cwd) if destructive else None
         if kinds and "trusted" in kinds:
             call.signals.append(Signal(
                 "hook:delete_in_trusted_dir", 0.0,

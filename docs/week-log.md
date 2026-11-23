@@ -13,9 +13,12 @@ in them came from the same code and the same rules, so:
 |---|---|---|---|---|---|---|
 | `week1` | `2026.10.3` | `p-78e342c112` | `D:/agentguard-week/agentguard.policy.yaml` | wheel from `week1`, non-editable, venv `D:/agentguard-week` | **2026-10-03** (frozen 2026-10-02; the daemon first answered from the venv at about 04:40 UTC, first hook row is audit #14 at 04:41 UTC) | ends when `week2` is installed |
 | `week2` | `2026.10.4` | `p-68f143cdb5` (the week1 live policy file, unchanged, hashes to this under week2 code: the new `temp_deletes_ok` setting defaults to true) | `D:/agentguard-week/agentguard.policy.yaml` | wheel from `week2`, non-editable, same venv | never installed: the live daemon still ran week1 code on 2026-10-10 (its health reply carries no version fields) | superseded by `week3` |
-| `week3` | `2026.10.5` | `p-f27874a375` (the unchanged live file and the shipped file both hash to this under week3 code) | same live file | wheel `agentguard-0.4.0` from `week3`, non-editable, same venv | installed 2026-10-19 (daemon health confirmed 0.4.0 / 2026.10.5 / p-f27874a375) | superseded by `week4` |
-| `week4` | `2026.10.6` | `p-b81428c2d4` with `trusted_delete_dirs: ["~/bbtest"]` added to the live file (`p-0cf2eccf8f` if the file is left unchanged) | same live file | wheel `agentguard-0.4.1` from `week4`, same venv | installed 2026-10-19 (0.4.1 was built; install not confirmed) | superseded by `week5` |
-| `week5` | `2026.10.7` | `p-084c0f1e59` with `~/bbtest` trusted (`p-aba1e11dac` without); hashed from the migrated copy `tainttrail.policy.yaml` | `D:/agentguard-week/tainttrail.policy.yaml` (copied by `tainttrail migrate`) | wheel `tainttrail-0.5.0` from `week5`, same venv, old `agentguard` dist uninstalled | starts when the user migrates | — |
+| `week3` | `2026.10.5` | `p-f27874a375` (the unchanged live file and the shipped file both hash to this under week3 code) | same live file | wheel `agentguard-0.4.0` from `week3`, non-editable, same venv | installed 2026-10-19 (daemon health confirmed 0.4.0 / 2026.10.5 / p-f27874a375) | still running on 2026-11-23 - the month measured in "Why week5 exists" |
+| `week4` | `2026.10.6` | `p-b81428c2d4` with `trusted_delete_dirs: ["~/bbtest"]` added to the live file (`p-0cf2eccf8f` if the file is left unchanged) | same live file | wheel `agentguard-0.4.1` from `week4`, same venv | never installed (built 2026-10-19; the live daemon stayed on week3) | superseded by `week5` |
+| `week5` = `v0.5.0` | `2026.11.1` | `p-c0da54c361` with `~/bbtest` trusted (`p-0c89b4cc70` without; shipped file `p-dd0c1f0e40`); hashed from the migrated copy `tainttrail.policy.yaml` | `D:/agentguard-week/tainttrail.policy.yaml` (copied by `tainttrail migrate`) | wheel `tainttrail-0.5.0` from `v0.5.0`, same venv, old `agentguard` dist uninstalled | starts when the user migrates | — |
+
+The first 0.5.0 build (rename only, detector 2026.10.7, commit 7363bdb) was never pushed or
+installed; the `week5` tag moved to the launch commit.
 
 ## Why week2 exists: week 1 accuracy, measured
 
@@ -169,3 +172,39 @@ named `agentguard` no longer skips the hook by default.
 - The live policy file (a copy of the week1 shipped file) lists
   `gateway_servers: ["agentguard"]` explicitly. `migrate` prints a note: the user uses no
   MCP servers, so removing it is safe.
+
+## Why week5 exists, part 2: a month in enforce mode, then the public launch
+
+week3 (detector 2026.10.5) ran in **enforce** mode on the author's machine from
+2026-10-23 to 2026-11-22 (30-day report; 11 days with no events, which are either quiet
+days or outages, since hooks fail open):
+
+- 4,777 tool calls gated: 4,754 ALLOW, 19 REVIEW (permission prompts), 4 BLOCK, so 0.48%
+  were interrupted.
+- Of the 19 prompts, the author approved 16 and 3 were left pending. 13 of the 16 approved
+  were deletes of generated output inside the project: `rm -rf Screenshots/...`,
+  `Sandbox`, a scan-output folder. 3 were `curl`/`pip` follow-ups flagged as taint
+  exfiltration.
+- The 4 blocks: 3 hard-enforced self-protection, 1 secret over the DLP limit.
+- 92 taint events (untrusted results fingerprinted), against 0 in week 1. The week3
+  browser-pane and shell-fetch sources are doing their job.
+
+Changes for the launch (detector 2026.11.1), each with tests that failed first:
+
+- `hooks.trusted_delete_dirs` accepts **project-relative** entries (`Screenshots`). They
+  mean that folder inside the session's project, until a `cd` the parser can't follow.
+  `.`, `..` and escapes are refused.
+- Commands inside PowerShell / bash `{ }` blocks are analysed one by one. Real case #36
+  was `if (Test-Path $t) { Remove-Item $t -Recurse }` on a temp folder.
+- **A bug in the week3/week5 code:** `Remove-Item ... -Recurse` matches greedily to the end
+  of the line, and only the delete where the match started was checked. So
+  `Remove-Item $env:TEMP\x -Recurse; Remove-Item C:\Work -Recurse` was let through. Every
+  delete the matched text overlaps must now be safe.
+- Self-protection also covers `tainttrail uninstall` and `tainttrail daemon stop`.
+- `tainttrail setup` / `tainttrail uninstall`: a one-command install with no admin rights.
+  On Windows, auto-start uses the Startup folder.
+- Latency is measured by `scripts/bench_hooks.py`. Windows 11: 6.5–8.4 ms p50 with a reused
+  connection, ~29 ms with a new one. WSL2: 8.5–9.7 ms either way. A 200-line Write takes
+  about 40 ms.
+
+Tests: Windows 641 passed; WSL Ubuntu 640 passed, 1 skipped (npx).

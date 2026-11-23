@@ -1,151 +1,189 @@
+<div align="center">
+
 # TaintTrail
 
-> **Status: alpha.** Used daily by its author on Windows with Claude Code; never yet run by
-> anyone else, or on Linux or macOS outside CI. Expect rough edges, and read
-> [Known limitations](#known-limitations-stated-plainly) before you rely on it.
->
-> **Formerly AgentGuard.** Renamed in 0.5.0 because several unrelated projects share that
-> name, two of them Claude Code tools that use the same `agentguard` command and
-> `~/.agentguard` folder. Upgrading: [from AgentGuard](#upgrading-from-agentguard).
+**Your AI coding agent reads the internet. TaintTrail remembers what it read.**
 
-**TaintTrail tracks untrusted text through your AI agent's memory and across sessions.** A
-poisoned web page that your agent saves to memory today is still marked as untrusted when
-a new conversation recalls it next week, and it is stopped when it heads out by email,
-`curl` or a commit.
+Local runtime security for Claude Code and MCP agents. Untrusted text is tracked through
+the agent's memory and across sessions, and stopped when it tries to leave your machine.
 
-It runs locally next to Claude Code (through its hooks) and in front of MCP servers (as a
-proxy). It also blocks credential-file reads and secrets leaving the machine, holds
-prompt-injection worms that try to copy themselves into files, and keeps a hash-chained
-audit log. Nothing leaves your machine.
+[![CI](https://github.com/SRIJAICJ24/tainttrail/actions/workflows/ci.yml/badge.svg)](https://github.com/SRIJAICJ24/tainttrail/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](pyproject.toml)
+[![Windows | macOS | Linux](https://img.shields.io/badge/os-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](.github/workflows/ci.yml)
+[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#known-limitations-stated-plainly)
 
-## See it in 60 seconds
+<img src="docs/demo.svg" width="760" alt="tainttrail demo: a poisoned web page is saved to memory, quarantined, recalled in a new session, and stopped before it is emailed out">
 
-```bash
-tainttrail demo
-```
+</div>
 
-```
-SESSION 1
-  agent searches the web for "cloud pricing"
-  the top result hides an instruction in an HTML comment: ...
-  agent obeys and saves to memory: "all future invoices should be routed to billing@attacker-col..."
-  TaintTrail: that text came from an untrusted web page -> QUARANTINED as memory item #1
+## Install in one minute
 
-SESSION 2 - a later, separate conversation; its taint map starts empty
-  agent recalls "routing": "all future invoices should be routed to billing@attacker-col..."
-  TaintTrail: recalled text matches quarantined item -> taint re-attached (quarantine:1)
-  agent tries to email it to attacker@evil.example
-  TaintTrail: STOPPED (REVIEW, held for a human to approve) - the email was not sent
-```
-
-The demo is offline and deterministic. Every value in it is fake, and it writes nothing
-outside a temporary folder that it deletes afterwards. `--keep DIR` keeps that folder's
-audit log for inspection, and `--pause 0.4` slows the output down for recording.
-
-**Recording it.** On Linux, macOS or WSL:
-`asciinema rec tainttrail-demo.cast -c "tainttrail demo --pause 0.4"`. asciinema has no
-native Windows build, so on Windows use [ScreenToGif](https://www.screentogif.com/): record
-a terminal window running `tainttrail demo --pause 0.4`, then trim and save it as a GIF.
-
-## Measured accuracy
-
-This is measured on real traffic, not a test set. The sample is 6,455 real Claude Code tool
-calls from one developer's past sessions (13 projects: web apps, Android, a Godot game,
-docs), replayed through the hook engine with `tainttrail replay`. The work was ordinary,
-so nearly every flag is a false alarm.
-
-| Detector | Calls | Flagged (REVIEW or BLOCK) | Hard-blocked even in observe mode |
-|---|---|---|---|
-| 2026.10.3 (week 1) | 6,455 | 600 (9.3%) | 113 |
-| 2026.10.4 (week 2) | 6,455 | 82 (**1.3%**) | 30 |
-| 2026.10.5 (week 3: browser-pane and `curl` results become taint sources) | 7,341 | 88 (1.2%) | 30 |
-
-**Caveat: the detectors were tuned on this same history.** The week 2 fixes came from
-studying these exact false alarms, so 1.3% is a best case. It is not a prediction for your
-traffic. Measure your own; it is read-only and takes about a minute:
-
-```bash
-tainttrail replay --examples 10
-```
-
-All 30 remaining hard blocks are real reads of real secret files (`cat .env.live-dev`,
-`grep KEY .env.local`, `docker compose config` printing resolved secrets). That is what the
-rule is for. **What isn't measured:** recall against real attacks, because no real attack
-traffic exists to replay. Attack coverage comes only from the simulator and the test suite.
-Fixes and numbers per version: [docs/week-log.md](docs/week-log.md).
-
-## Quickstart
-
-Install it. It isn't on PyPI yet:
+You need Python 3.11+ and [pipx](https://pipx.pypa.io/stable/installation/).
 
 ```bash
 pipx install git+https://github.com/SRIJAICJ24/tainttrail
+tainttrail setup
 ```
 
-**1. Measure before you install anything into Claude Code.** This replays your past Claude
-Code sessions (the transcripts under your Claude config folder's `projects/`) through the
-detector. It reads them without changing them and writes nothing outside a temporary
-folder.
+`setup` does the following, without Administrator rights:
+
+- writes a config and a starter policy to `~/.tainttrail`;
+- registers the Claude Code hooks, leaving any other tool's hooks alone;
+- starts the background daemon;
+- makes the daemon start at login;
+- checks that everything answers.
+
+It starts in **observe mode**: everything is logged, and only a short list is blocked:
+
+- reading `~/.ssh`, `~/.aws` or `.env` files;
+- a real secret leaving the machine;
+- an agent tampering with TaintTrail itself.
+
+Run `tainttrail setup --enforce` to block risky calls or ask about them from day one.
+
+**Not sure yet? Measure first.** This replays your past Claude Code sessions through the
+detector. It reads them without changing anything and installs nothing:
 
 ```bash
 tainttrail replay --examples 10
 ```
 
-**2. Install the hooks and start the daemon** (observe mode: it logs, and blocks only
-the short [hard-enforced list](#claude-code-hooks-seeing-claude-codes-own-tools)):
+`tainttrail uninstall` undoes all of it and keeps your audit log. Then try
+`tainttrail demo`, `tainttrail status` and `tainttrail report`.
+
+## What it stops
+
+| When this happens | TaintTrail |
+|---|---|
+| A web page, `curl` output or browser page carries a hidden instruction, and the agent later sends that text out by email, POST, chat or a commit | **taint**: untrusted results are fingerprinted, so the outbound call is held for review or blocked |
+| The injected "rule" is saved to the agent's memory and recalled in a **later session** | **quarantine ledger**: the memory write is held, and the taint comes back with it on recall |
+| The agent reads `~/.ssh`, `~/.aws` or `.env` | blocked, even in observe mode |
+| A real API key or token goes out in a network call | blocked, even in observe mode |
+| A prompt-injection worm copies itself into files, comments or commits | `propagation:replication`, held for review |
+| `rm -rf ~`, `Remove-Item -Recurse C:\Users\…`, disk wipes | held for review. Deletes inside temp folders, or folders you trust, are only logged |
+| An MCP tool's description changes after you approved it (a "rug pull") | forced review (MCP gateway) |
+| The agent tries to switch TaintTrail off: editing its config or hooks, `tainttrail uninstall` | self-protection, blocked |
+
+## Measured, not claimed
+
+- **A month in enforce mode** on the author's Windows machine (2026-10-23 to 11-22, detector
+  2026.10.5):
+  - 4,777 tool calls, of which 23 were interrupted (**0.5%**): 19 permission prompts and 4
+    blocks.
+  - The author approved 16 of the 19 prompts. Most were deletes of generated output
+    folders, which you can now mark as trusted.
+  - 3 of the 4 blocks were the agent touching TaintTrail's own files.
+  - 92 untrusted results were tracked.
+- **Replay of 6,455 earlier calls:** 1.3% flagged. The detectors were tuned on that same
+  history, so treat it as a best case and run `tainttrail replay` on your own.
+- **Hook latency** ([`scripts/bench_hooks.py`](scripts/bench_hooks.py), Windows 11, Intel
+  Coffee Lake, Python 3.13, 200 calls each):
+
+  | Call | p50, reused connection | p95 | p50, new connection |
+  |---|---|---|---|
+  | Bash, Read, `curl`, WebFetch result | 6.5–8.4 ms | 11–13 ms | ~29 ms |
+  | Write of 200 lines | 40 ms | 49 ms | 61 ms |
+
+  On Linux (WSL2, Python 3.12), typical calls take 8.5–9.7 ms at p50 either way: a new
+  connection costs no more there. The extra ~20 ms on Windows is localhost connection
+  setup.
+
+- **Not measured:** how many real attacks it catches. There's no real attack traffic to
+  replay, so attack coverage comes only from the red-team simulator (`tainttrail simulate`,
+  100/100) and 640+ tests.
+
+Per-version numbers and fixes: [docs/week-log.md](docs/week-log.md).
+
+## Where it fits
+
+TaintTrail is **not a sandbox**. Use it alongside Claude Code's sandbox and permission
+modes:
+
+- The sandbox limits what a process can touch.
+- TaintTrail looks at content: where a piece of text came from, where it's going, and
+  whether you've seen it before, across sessions.
+
+The rules are deterministic, with no LLM judge in the loop. Nothing leaves your machine.
+
+**Works with:**
+- Claude Code hooks, on Windows, macOS and Linux;
+- any MCP client, through the MCP gateway (`tainttrail proxy --upstream …`).
+
+**Planned:** hooks for OpenAI Codex CLI and Cursor.
+
+<details>
+<summary><b>Manual setup, recording the demo, other install options</b></summary>
+
+**Manual setup.** This is what `tainttrail setup` does, step by step:
 
 ```bash
-tainttrail onboard               # config + starter policy; safe defaults, hold Enter
-tainttrail install-hooks         # registers PreToolUse/PostToolUse in your Claude Code user settings
-tainttrail proxy                 # the daemon; or `tainttrail onboard --install-daemon`
-tainttrail doctor                # hooks installed, daemon answering?
+tainttrail onboard                    # config + starter policy; safe defaults, hold Enter
+tainttrail install-hooks              # PreToolUse/PostToolUse in your Claude Code user settings
+tainttrail proxy                      # the daemon (or: tainttrail onboard --install-daemon)
+tainttrail doctor                     # hooks installed, daemon answering?
+tainttrail configure mode enforce     # once the false-alarm rate is acceptable to you
 ```
 
-**3. After a few days,** compare what it flagged with what you were doing:
+**Other install options:**
+- a release wheel from [Releases](https://github.com/SRIJAICJ24/tainttrail/releases):
+  `pipx install <wheel URL>`;
+- from a checkout: `pip install -e ".[dev]"`.
 
-```bash
-tainttrail status                # versions, policy in use, daemon state, gaps
-tainttrail report --since 7d     # what fired; `--fp-review` to label false alarms
-tainttrail configure mode enforce   # only once the false-alarm rate is acceptable to you
-```
-
-Other things to try: `tainttrail simulate` scores the attack scenario library against your
-policy, and `tainttrail scan "some text"` checks a single string.
+**The demo** is offline and deterministic. Every value in it is fake, and it writes nothing
+outside a temporary folder that it deletes afterwards.
+- `--keep DIR` keeps that folder's audit log.
+- `--pause 0.4` slows the output down for screen recordings: asciinema on Linux, macOS or
+  WSL, [ScreenToGif](https://www.screentogif.com/) on Windows.
+- `python scripts/render_demo_svg.py` regenerates the image above.
 
 Built on [FastMCP](https://github.com/jlowin/fastmcp) (v3) and
 [`detect-secrets`](https://github.com/Yelp/detect-secrets). Licensed under
 [Apache-2.0](LICENSE).
 
-### Upgrading from AgentGuard
+</details>
 
-Up to 0.4.x this project was called AgentGuard: package `agentguard`, command
-`agentguard`, state in `~/.agentguard`, env var `AGENTGUARD_HOME`. Now the package and
-command are `tainttrail`, state lives in `~/.tainttrail`, and the env var is
-`TAINTTRAIL_HOME`. `AGENTGUARD_HOME` still works for this release, with a warning.
+<details>
+<summary><b>Upgrading from AgentGuard</b> (this project's name before 0.5.0)</summary>
+
+Several unrelated projects share the old name, and two of them are Claude Code tools that
+use the same `agentguard` command and the same home folder. Up to 0.4.x this project was:
+
+- package and command `agentguard`;
+- state in `~/.agentguard`;
+- env var `AGENTGUARD_HOME`.
+
+Now the package and command are `tainttrail`, state lives in `~/.tainttrail`, and the env
+var is `TAINTTRAIL_HOME`. `AGENTGUARD_HOME` still works for this release, with a warning.
 
 ```bash
 agentguard daemon stop                 # the old daemon
 agentguard uninstall-hooks             # the old hook entries
-pip uninstall agentguard && pip install tainttrail
+pip uninstall agentguard               # then install tainttrail as above
 tainttrail migrate --dry-run           # shows what it would copy
 tainttrail migrate                     # copies, then verifies
-tainttrail install-hooks
-tainttrail doctor
+tainttrail setup
 ```
 
-`migrate` copies only files this project created: the config, the database (audit log,
-quarantine ledger, review queue, labels), `daemon.log`, and the policy file your config
-points at, as `tainttrail.policy.yaml`. It regenerates the Windows launchers rather than
-copying them. It never lists `~/.agentguard`, so other tools' files there, such as GoPlus
-AgentGuard's `audit.jsonl`, are never read, moved or deleted. Nothing in the old folder
-is changed. After copying it checks the audit chain, every table's row count, the
-quarantine ledger and the policy hash, and it refuses to overwrite an existing
-`~/.tainttrail`.
+**What `migrate` copies:** only files this project created:
+- the config;
+- the database (audit log, quarantine ledger, review queue, labels);
+- `daemon.log`;
+- the policy file your config points at, saved as `tainttrail.policy.yaml`.
 
-`install-hooks` and `uninstall-hooks` recognise only the exact hook entries they write
-(the `http://127.0.0.1:<port>/hooks/claude-code` URL, or `python -m tainttrail.hookclient`;
-the old `python -m agentguard.hookclient` form is also removed). Other tools' hooks are
-left alone, including `agentguard hook` from other AgentGuard projects.
+**How it stays safe:**
+- It regenerates the Windows launchers rather than copying them.
+- It never lists `~/.agentguard`, so other tools' files there are never read, moved or
+  deleted. Nothing in the old folder is changed.
+- After copying it checks the audit chain, every table's row count, the quarantine ledger
+  and the policy hash.
+- It refuses to overwrite an existing `~/.tainttrail`.
+
+`install-hooks` and `uninstall-hooks` recognise only the exact hook entries they write.
+Other tools' hooks are left alone, including `agentguard hook` from other AgentGuard
+projects.
+
+</details>
 
 ---
 
@@ -281,7 +319,7 @@ target this project's `.claude/settings.json` / `settings.local.json` instead.
 
 | Tool | What TaintTrail checks |
 |---|---|
-| `Bash` / `PowerShell` | secrets and credential paths anywhere in the command. Network commands (`curl`, `wget`, `nc`, `scp`, `Invoke-WebRequest`, …) to hosts outside `hooks.allow_hosts` join the **exfiltration** tier. `git commit`/`push` and output redirected into files join the **propagation** tier. Recursive deletes and disk-level commands → **REVIEW**, except deletes provably inside the temp folder or a folder you list in `hooks.trusted_delete_dirs` (followed into `bash -c "..."` and `wsl.exe -e bash -c`). All patterns live in `tainttrail.policy.yaml` under `hooks.bash` |
+| `Bash` / `PowerShell` | secrets and credential paths anywhere in the command. Network commands (`curl`, `wget`, `nc`, `scp`, `Invoke-WebRequest`, …) to hosts outside `hooks.allow_hosts` join the **exfiltration** tier. `git commit`/`push` and output redirected into files join the **propagation** tier. Recursive deletes and disk-level commands → **REVIEW**, except deletes provably inside the temp folder or a folder you list in `hooks.trusted_delete_dirs` (a fixed path like `~/myproject/out`, or a name like `Screenshots` that means that folder in whichever project the agent works in; followed into `bash -c "..."`, `wsl.exe -e bash -c` and PowerShell `{ }` blocks). All patterns live in `tainttrail.policy.yaml` under `hooks.bash` |
 | `Read` / `Write` / `Edit` | path denylist; secret scan on written content; writes join the propagation tier (worm detection, DLP) |
 | `WebFetch` / `WebSearch` | results are **untrusted** and fingerprinted into the session's taint map, so a later `Write` or `curl` of that text is caught |
 | Shell fetches, browser pages | the output of `curl`/`wget`/`Invoke-WebRequest` to a host outside the allowlist, and MCP tools that return page text (`get_page_text`, `read_page`, `hooks.untrusted_mcp_tools`), are untrusted too. Following a link isn't sending data: for the exfiltration check a URL counts only by its query string |
@@ -671,7 +709,12 @@ python -m tainttrail.cli report --since 7d --export week.csv   # 4. anonymized c
 ## Everyday commands
 
 ```bash
-tainttrail onboard                   # first-time setup wizard
+tainttrail setup                     # install everything: config, policy, hooks, daemon, auto-start
+tainttrail setup --enforce           # same, blocking/asking on risky calls from day one
+tainttrail uninstall                 # remove hooks, daemon and auto-start (keeps the audit log)
+tainttrail replay --examples 10      # what it would have flagged in your past sessions (read-only)
+tainttrail demo                      # the memory-poisoning attack, stopped, in 60 seconds
+tainttrail onboard                   # first-time setup wizard (manual path)
 tainttrail onboard --install-daemon  # also write a background-service definition
 tainttrail doctor                    # check config, ports, policy, audit chain
 tainttrail configure <setting> <val> # change one setting (port/mode/dashboard/upstream)
@@ -772,7 +815,7 @@ everything would be worse than no score at all.
 python -m pytest tests/ -q
 ```
 
-593 tests, one file per stage. The ones that matter most are the four attack
+641 tests, one file per stage. The ones that matter most are the four attack
 reproductions in
 [`tests/test_stage25_taint_quarantine.py`](tests/test_stage25_taint_quarantine.py):
 
@@ -852,9 +895,18 @@ open an issue.
 - [x] **Pre-launch pass** — browser-pane and shell-fetch results are taint sources, `status`
   shows the policy and versions the daemon really uses, `tainttrail demo`, Apache-2.0,
   CI for three OSes, release workflow (TestPyPI first, manual)
-- [ ] **The validation week itself** — week 1 started 2026-10-03 on detector 2026.10.3.
-  Labelled precision from it is still too small to quote (n < 20)
-- [ ] Packaged install (`pipx install tainttrail` once published to PyPI)
+- [x] **Rename to TaintTrail (0.5.0)**: `migrate`, exact-match hook install, and other
+  tools' files and hooks left alone
+- [x] **Public launch**: `tainttrail setup` / `uninstall` (one command, no admin rights),
+  project-relative trusted folders, PowerShell `{ }` blocks, every delete on a greedily
+  matched line checked, a hook latency benchmark, and the README demo image
+- [x] **A month in enforce mode** on real work: 4,777 calls, 0.5% interrupted (above)
+- [ ] Labelled precision from more people than the author. Run
+  `tainttrail report --fp-review` and send the export (see the false-positive issue
+  template)
+- [ ] Packaged install from PyPI (`pipx install tainttrail`). The release workflow is ready;
+  publishing it needs the maintainer's PyPI setup
+- [ ] Hooks for OpenAI Codex CLI and Cursor
 
 ### Known limitations, stated plainly
 
@@ -1005,6 +1057,7 @@ tainttrail/
   replay.py      `tainttrail replay`: past Claude Code transcripts through the engine
   demo.py        `tainttrail demo`: the memory-poisoning attack, offline, in a temp folder
   migrate.py     `tainttrail migrate`: copy the pre-rename state into the new home, verified
+  installer.py   `tainttrail setup` / `uninstall`: one-command install, no admin rights
   mock_upstream.py the mock MCP server used by `simulate` (examples/ has a shim)
   cli.py         command line interface
 docs/BUILD_PROMPTS.md       the staged build specification
@@ -1012,7 +1065,7 @@ docs/standards-mapping.md   OWASP LLM 2026 / Agentic Top 10 / ACS mapping
 docs/claude-code-hooks-notes.md   verified hook schema + design notes
 examples/mock_mcp_server.py
 examples/safe_first_run.py + .md   disposable sandbox for the first real run
-tests/           593 tests, one file per stage
+tests/           641 tests, one file per stage
 ```
 
 This is v2 of an earlier hackathon project ("Agent-Guard").
