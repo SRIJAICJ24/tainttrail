@@ -75,7 +75,9 @@ def test_setup_on_windows_does_everything_without_admin(machine):
     home = machine["home"] / ".tainttrail"
     conf = config.load(home / "tainttrail.json")
     assert conf.mode == "observe"
-    assert Path(conf.policy_file) == home / "tainttrail.policy.yaml"
+    # setup stores the resolved path: on CI that expands 8.3 short names (Windows)
+    # and /var -> /private/var (macOS), so compare resolved paths
+    assert Path(conf.policy_file) == (home / "tainttrail.policy.yaml").resolve()
     assert (home / "tainttrail.policy.yaml").is_file()
     hooks = _hooks(machine["settings"])
     assert sum(hookinstall.is_ours(h) for h in hooks) == 2 and GOPLUS in hooks
@@ -206,3 +208,16 @@ def test_cli_wiring(machine, monkeypatch, capsys):
     assert seen["enforce"] is True and seen["start"] is False
     monkeypatch.setattr(installer, "uninstall", lambda **kw: installer.InstallerResult(True, ["bye"]))
     assert main(["uninstall"]) == 0
+
+
+def test_daemon_stop_says_how_to_start_again(machine, monkeypatch):
+    """The stop message pointed at `schtasks /Run`, which setup no longer uses
+    (Task Scheduler needed admin rights)."""
+    from tainttrail import config, daemonctl
+
+    home = config.tainttrail_home()
+    home.mkdir(parents=True)
+    (home / daemonctl.PID_FILE).write_text("4242", encoding="utf-8")
+    monkeypatch.setattr(daemonctl.os, "kill", lambda pid, sig: None)
+    ok, message = daemonctl.stop()
+    assert ok and "tainttrail setup" in message and "schtasks" not in message

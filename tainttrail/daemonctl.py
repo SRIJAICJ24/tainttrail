@@ -89,8 +89,8 @@ def stop() -> tuple[bool, str]:
         return False, f"could not stop pid {pid}: {exc}"
     (home / PID_FILE).unlink(missing_ok=True)
     return True, (f"stopped the daemon (pid {pid}). While stopped, Claude Code hooks "
-                  f"fail open - nothing is checked. Start it again with the service "
-                  f"(schtasks /Run /TN TaintTrail on Windows) or `tainttrail proxy`.")
+                  f"fail open - nothing is checked. Start it again with "
+                  f"`tainttrail setup` (or run `tainttrail proxy` in a terminal).")
 
 
 def clear_stop_flag(home: Path | None = None) -> None:

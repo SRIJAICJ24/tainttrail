@@ -815,7 +815,7 @@ everything would be worse than no score at all.
 python -m pytest tests/ -q
 ```
 
-641 tests, one file per stage. The ones that matter most are the four attack
+642 tests, one file per stage. The ones that matter most are the four attack
 reproductions in
 [`tests/test_stage25_taint_quarantine.py`](tests/test_stage25_taint_quarantine.py):
 
@@ -1065,7 +1065,7 @@ docs/standards-mapping.md   OWASP LLM 2026 / Agentic Top 10 / ACS mapping
 docs/claude-code-hooks-notes.md   verified hook schema + design notes
 examples/mock_mcp_server.py
 examples/safe_first_run.py + .md   disposable sandbox for the first real run
-tests/           641 tests, one file per stage
+tests/           642 tests, one file per stage
 ```
 
 This is v2 of an earlier hackathon project ("Agent-Guard").
